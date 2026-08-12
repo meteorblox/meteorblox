@@ -20,21 +20,16 @@ jobs:
     timeout-minutes: 20
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SUIUP_INSTALL_DIR: ${{ runner.temp }}/suiup
-      SUIUP_DEFAULT_BIN_DIR: ${{ runner.temp }}/sui-bin
+      SUIUP_INSTALL_DIR: /tmp/meteorblox-suiup
+      SUIUP_DEFAULT_BIN_DIR: /tmp/meteorblox-sui-bin
 
     steps:
       - name: Check out source
         uses: actions/checkout@v5
 
-      - name: Install suiup
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
-          echo "${SUIUP_INSTALL_DIR}" >> "${GITHUB_PATH}"
-          echo "${SUIUP_DEFAULT_BIN_DIR}" >> "${GITHUB_PATH}"
-
       - name: Install Sui Testnet CLI
         run: |
+          curl --proto '=https' --tlsv1.2 -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
           "${SUIUP_INSTALL_DIR}/suiup" install sui@testnet -y
           "${SUIUP_DEFAULT_BIN_DIR}/sui" --version
 

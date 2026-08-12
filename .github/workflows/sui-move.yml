@@ -1,0 +1,48 @@
+name: Sui Move checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sui-move-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  move:
+    name: Build, test, and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SUIUP_INSTALL_DIR: ${{ runner.temp }}/suiup
+      SUIUP_DEFAULT_BIN_DIR: ${{ runner.temp }}/sui-bin
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install suiup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
+          echo "${SUIUP_INSTALL_DIR}" >> "${GITHUB_PATH}"
+          echo "${SUIUP_DEFAULT_BIN_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Install Sui Testnet CLI
+        run: |
+          "${SUIUP_INSTALL_DIR}/suiup" install sui@testnet -y
+          "${SUIUP_DEFAULT_BIN_DIR}/sui" --version
+
+      - name: Build Move package
+        run: "${SUIUP_DEFAULT_BIN_DIR}/sui move build"
+
+      - name: Run Move unit tests
+        run: "${SUIUP_DEFAULT_BIN_DIR}/sui move test"
+
+      - name: Run Sui Move linter
+        run: "${SUIUP_DEFAULT_BIN_DIR}/sui move lint"

@@ -5,6 +5,7 @@ use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
+use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
@@ -148,20 +149,30 @@ public entry fun place(
     });
 }
 
-/// TESTNET CHECKPOINT: winner_tile is admin-supplied only until the next step
-/// replaces it with Sui's on-chain randomness. Do not use this on Mainnet.
-public entry fun settle_testnet(
+/// Settle with Sui's native on-chain randomness. Anyone may call this after
+/// the timer expires. The winner is sampled uniformly from occupied tiles so
+/// every successful settlement has one fixed outcome and cannot be retried to
+/// reject an empty tile.
+public entry fun settle(
     game: &mut Game,
-    winner_tile: u8,
+    random_state: &Random,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
-    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
-    assert!(winner_tile < TILE_COUNT, E_INVALID_TILE);
 
+    let mut occupied = vector[];
+    let mut tile = 0;
+    while (tile < TILE_COUNT) {
+        if (*game.tile_totals.borrow(tile as u64) > 0) occupied.push_back(tile);
+        tile = tile + 1;
+    };
+    assert!(!occupied.is_empty(), E_WINNER_EMPTY);
+
+    let mut generator = random::new_generator(random_state, ctx);
+    let occupied_index = generator.generate_u64_in_range(0, occupied.length() - 1);
+    let winner_tile = *occupied.borrow(occupied_index);
     let winning_stake = *game.tile_totals.borrow(winner_tile as u64);
-    assert!(winning_stake > 0, E_WINNER_EMPTY);
 
     let gross = balance::value(&game.pot);
     let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);

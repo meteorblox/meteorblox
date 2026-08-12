@@ -118,7 +118,7 @@ public entry fun bind_mtbx_rewards(
 ) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(option::is_none(&game.reward_cap), E_REWARDS_ALREADY_BOUND);
-    game.reward_cap = option::some(reward_cap);
+    option::fill(&mut game.reward_cap, reward_cap);
 }
 
 /// Admin opens the first round, or the next round after every winning entry
@@ -200,8 +200,6 @@ public entry fun settle(
     let mut generator = random::new_generator(random_state, ctx);
     let occupied_index = generator.generate_u64_in_range(0, occupied.length() - 1);
     let winner_tile = *occupied.borrow(occupied_index);
-    let winning_stake = *game.tile_totals.borrow(winner_tile as u64);
-
     let gross = balance::value(&game.pot);
     let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);
     let mut fee = balance::split(&mut game.pot, protocol_fee);

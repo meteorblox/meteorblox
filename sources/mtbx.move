@@ -99,7 +99,9 @@ fun init(witness: MTBX, ctx: &mut TxContext) {
 
 /// Award unrefined MTBX without minting transferable coins. Total promises are
 /// capped at 25 million MTBX, so future claims cannot exceed maximum supply.
-public entry fun award(
+/// Only another module in this package can create mined rewards. The game also
+/// has to present the unique RewardCap, which is locked into the shared Game.
+public(package) fun award_from_game(
     refinery: &mut Refinery,
     cap: &RewardCap,
     recipient: address,
@@ -121,6 +123,10 @@ public entry fun award(
         claimed: false,
     });
     event::emit(RewardAwarded { owner: recipient, amount, matures_at_ms: matures });
+}
+
+public fun remaining_award_capacity(refinery: &Refinery): u64 {
+    MAX_SUPPLY - refinery.awarded
 }
 
 /// Claim one fully refined position with no penalty.

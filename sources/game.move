@@ -9,6 +9,7 @@ use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
+use meteorblox::mtbx::{Self, Refinery, RewardCap};
 
 const TILE_COUNT: u8 = 25;
 const ROUND_MS: u64 = 60_000;
@@ -16,6 +17,8 @@ const BPS: u64 = 10_000;
 const PROTOCOL_FEE_BPS: u64 = 1_000;
 const TREASURY_BPS: u64 = 700;
 const REWARDS_BPS: u64 = 200;
+/// Each settled round distributes 0.25 unrefined MTBX across winning stakes.
+const MTBX_ROUND_REWARD: u64 = 250_000;
 
 const E_NOT_ADMIN: u64 = 1;
 const E_ROUND_CLOSED: u64 = 2;
@@ -26,6 +29,8 @@ const E_NOT_SETTLED: u64 = 6;
 const E_NO_CLAIM: u64 = 7;
 const E_WINNER_EMPTY: u64 = 8;
 const E_CLAIMS_PENDING: u64 = 9;
+const E_REWARDS_NOT_BOUND: u64 = 10;
+const E_REWARDS_ALREADY_BOUND: u64 = 11;
 
 public struct Entry has store {
     player: address,
@@ -50,6 +55,9 @@ public struct Game has key {
     treasury: Balance<SUI>,
     rewards: Balance<SUI>,
     ops: Balance<SUI>,
+    reward_cap: Option<RewardCap>,
+    mtbx_reward_initial: u64,
+    mtbx_reward_remaining: u64,
 }
 
 public struct EntryPlaced has copy, drop {
@@ -70,6 +78,7 @@ public struct WinningsClaimed has copy, drop {
     player: address,
     round: u64,
     amount: u64,
+    mtbx_amount: u64,
 }
 
 fun init(ctx: &mut TxContext) {
@@ -94,7 +103,22 @@ fun init(ctx: &mut TxContext) {
         treasury: balance::zero(),
         rewards: balance::zero(),
         ops: balance::zero(),
+        reward_cap: option::none(),
+        mtbx_reward_initial: 0,
+        mtbx_reward_remaining: 0,
     });
+}
+
+/// One-time setup transaction after package publication. The unique MTBX
+/// authority is consumed into Game so it can never be used for manual awards.
+public entry fun bind_mtbx_rewards(
+    game: &mut Game,
+    reward_cap: RewardCap,
+    ctx: &TxContext,
+) {
+    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
+    assert!(option::is_none(&game.reward_cap), E_REWARDS_ALREADY_BOUND);
+    game.reward_cap = option::some(reward_cap);
 }
 
 /// Admin opens the first round, or the next round after every winning entry
@@ -103,12 +127,15 @@ public entry fun open_next_round(game: &mut Game, clock: &Clock, ctx: &TxContext
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(game.settled, E_ROUND_OPEN);
     assert!(game.winning_entries_remaining == 0, E_CLAIMS_PENDING);
+    assert!(option::is_some(&game.reward_cap), E_REWARDS_NOT_BOUND);
 
     game.round = game.round + 1;
     game.closes_at_ms = clock.timestamp_ms() + ROUND_MS;
     game.settled = false;
     game.winning_tile = option::none();
     game.winner_pool_initial = 0;
+    game.mtbx_reward_initial = 0;
+    game.mtbx_reward_remaining = 0;
 
     let mut i = 0;
     while (i < TILE_COUNT) {
@@ -155,6 +182,7 @@ public entry fun place(
 /// reject an empty tile.
 public entry fun settle(
     game: &mut Game,
+    refinery: &Refinery,
     random_state: &Random,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -195,6 +223,10 @@ public entry fun settle(
     game.winning_tile = option::some(winner_tile);
     game.winner_pool_initial = balance::value(&game.pot);
     game.winning_entries_remaining = count;
+    let capacity = mtbx::remaining_award_capacity(refinery);
+    let round_reward = if (capacity < MTBX_ROUND_REWARD) capacity else MTBX_ROUND_REWARD;
+    game.mtbx_reward_initial = round_reward;
+    game.mtbx_reward_remaining = round_reward;
 
     event::emit(RoundSettled {
         round: game.round,
@@ -206,7 +238,12 @@ public entry fun settle(
 
 /// Claims one winning entry. A player with multiple entries can call this
 /// repeatedly in the same programmable transaction.
-public entry fun claim(game: &mut Game, ctx: &mut TxContext) {
+public entry fun claim(
+    game: &mut Game,
+    refinery: &mut Refinery,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
     assert!(game.settled && option::is_some(&game.winning_tile), E_NOT_SETTLED);
     let sender = tx_context::sender(ctx);
     let winner = *option::borrow(&game.winning_tile);
@@ -232,10 +269,31 @@ public entry fun claim(game: &mut Game, ctx: &mut TxContext) {
     } else {
         mul_div(game.winner_pool_initial, stake, winning_total)
     };
+    let mtbx_amount = if (game.winning_entries_remaining == 1) {
+        game.mtbx_reward_remaining
+    } else {
+        mul_div(game.mtbx_reward_initial, stake, winning_total)
+    };
+    assert!(option::is_some(&game.reward_cap), E_REWARDS_NOT_BOUND);
+    if (mtbx_amount > 0) {
+        mtbx::award_from_game(
+            refinery,
+            option::borrow(&game.reward_cap),
+            sender,
+            mtbx_amount,
+            clock,
+        );
+        game.mtbx_reward_remaining = game.mtbx_reward_remaining - mtbx_amount;
+    };
     game.winning_entries_remaining = game.winning_entries_remaining - 1;
     let payout = coin::from_balance(balance::split(&mut game.pot, amount), ctx);
     transfer::public_transfer(payout, sender);
-    event::emit(WinningsClaimed { player: sender, round: game.round, amount });
+    event::emit(WinningsClaimed {
+        player: sender,
+        round: game.round,
+        amount,
+        mtbx_amount,
+    });
 }
 
 public fun round(game: &Game): u64 { game.round }
@@ -249,6 +307,7 @@ public fun pot(game: &Game): u64 { balance::value(&game.pot) }
 public fun treasury_balance(game: &Game): u64 { balance::value(&game.treasury) }
 public fun rewards_balance(game: &Game): u64 { balance::value(&game.rewards) }
 public fun ops_balance(game: &Game): u64 { balance::value(&game.ops) }
+public fun mtbx_round_reward(): u64 { MTBX_ROUND_REWARD }
 
 fun mul_div(value: u64, numerator: u64, denominator: u64): u64 {
     (((value as u128) * (numerator as u128)) / (denominator as u128)) as u64
@@ -259,4 +318,9 @@ fun test_fee_math() {
     assert!(mul_div(10_000, PROTOCOL_FEE_BPS, BPS) == 1_000, 100);
     assert!(mul_div(10_000, TREASURY_BPS, BPS) == 700, 101);
     assert!(mul_div(10_000, REWARDS_BPS, BPS) == 200, 102);
+}
+
+#[test]
+fun test_mtbx_round_reward_is_quarter_token() {
+    assert!(MTBX_ROUND_REWARD == 250_000, 110);
 }

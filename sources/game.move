@@ -31,6 +31,7 @@ const E_WINNER_EMPTY: u64 = 8;
 const E_CLAIMS_PENDING: u64 = 9;
 const E_REWARDS_NOT_BOUND: u64 = 10;
 const E_REWARDS_ALREADY_BOUND: u64 = 11;
+const E_ROUND_NOT_EMPTY: u64 = 12;
 
 public struct Entry has store {
     player: address,
@@ -72,6 +73,10 @@ public struct RoundSettled has copy, drop {
     winning_tile: u8,
     gross: u64,
     winner_pool: u64,
+}
+
+public struct EmptyRoundClosed has copy, drop {
+    round: u64,
 }
 
 public struct WinningsClaimed has copy, drop {
@@ -234,6 +239,27 @@ public entry fun settle(
     });
 }
 
+/// Owner-only recovery for an expired round that received no entries. This
+/// cannot discard player funds because it requires the pot to be exactly zero.
+public entry fun close_empty_round(game: &mut Game, clock: &Clock, ctx: &TxContext) {
+    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
+    assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
+    assert!(balance::value(&game.pot) == 0, E_ROUND_NOT_EMPTY);
+    let mut i = 0;
+    while (i < game.entries.length()) {
+        assert!(game.entries.borrow(i).round != game.round, E_ROUND_NOT_EMPTY);
+        i = i + 1;
+    };
+
+    game.settled = true;
+    game.winning_tile = option::none();
+    game.winner_pool_initial = 0;
+    game.winning_entries_remaining = 0;
+    game.mtbx_reward_initial = 0;
+    game.mtbx_reward_remaining = 0;
+    event::emit(EmptyRoundClosed { round: game.round });
+}
+
 /// Claims one winning entry. A player with multiple entries can call this
 /// repeatedly in the same programmable transaction.
 public entry fun claim(
@@ -322,3 +348,4 @@ fun test_fee_math() {
 fun test_mtbx_round_reward_is_quarter_token() {
     assert!(MTBX_ROUND_REWARD == 250_000, 110);
 }
+

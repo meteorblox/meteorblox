@@ -1,0 +1,13 @@
+# Sui build output and dependency cache
+/build/
+/.move-cache/
+/.move-home/
+
+# Local Sui CLI configuration and wallet material
+/.sui-config/
+/sui.keystore
+/client.yaml
+
+# Local publish artifacts
+/publish-data.json
+

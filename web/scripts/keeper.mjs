@@ -1,0 +1,59 @@
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { Transaction } from "@mysten/sui/transactions";
+
+const packageId = "0x92ced0ea9bd54cffec3e6472c2c9b235a06b4a5ec70092c41cebfa2cd2e54d16";
+const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257c9";
+const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
+const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
+const randomId = "0x8";
+const clockId = "0x6";
+const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));
+const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
+
+if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
+
+const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
+const keypair = Ed25519Keypair.fromSecretKey(secret);
+console.log(`[keeper] Testnet keeper ${keypair.toSuiAddress()} started.`);
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function tick() {
+  const { object } = await client.core.getObject({ objectId: gameId, include: { json: true } });
+  const game = object.json;
+  if (!game || game.settled || Date.now() < Number(game.closes_at_ms)) return;
+
+  const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries?.length ?? 0) > 0;
+  const tx = new Transaction();
+  tx.setSender(keypair.toSuiAddress());
+  tx.setGasBudget(50_000_000);
+  if (occupied) {
+    tx.moveCall({
+      target: `${packageId}::game::settle_and_open_next`,
+      arguments: [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],
+    });
+  } else {
+    tx.moveCall({
+      target: `${packageId}::game::close_empty_and_open_next`,
+      arguments: [tx.object(gameId), tx.object(clockId)],
+    });
+  }
+
+  const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
+  if (result.$kind === "FailedTransaction") {
+    throw new Error(result.FailedTransaction.status.error?.message ?? "Keeper transaction failed");
+  }
+  console.log(`[keeper] ${occupied ? "Settled" : "Rolled over empty"} round. Transaction: ${result.Transaction.digest}`);
+  await client.core.waitForTransaction({ digest: result.Transaction.digest, timeout: 60_000 });
+}
+
+while (true) {
+  try {
+    await tick();
+  } catch (error) {
+    console.error(`[keeper] ${error instanceof Error ? error.message : String(error)}`);
+  }
+  await wait(pollMs);
+}
+

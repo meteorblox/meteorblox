@@ -22,7 +22,27 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function tick() {
   const { object } = await client.core.getObject({ objectId: gameId, include: { json: true } });
   const game = object.json;
-  if (!game || game.settled || Date.now() < Number(game.closes_at_ms)) return;
+  if (!game) return;
+
+  if (game.settled) {
+    const tx = new Transaction();
+    tx.setSender(keypair.toSuiAddress());
+    tx.setGasBudget(50_000_000);
+    tx.moveCall({
+      target: `${packageId}::game::open_next_round`,
+      arguments: [tx.object(gameId), tx.object(clockId)],
+    });
+
+    const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
+    if (result.$kind === "FailedTransaction") {
+      throw new Error(result.FailedTransaction.status.error?.message ?? "Round recovery failed");
+    }
+    console.log(`[keeper] Opened next round from settled state. Transaction: ${result.Transaction.digest}`);
+    await client.core.waitForTransaction({ digest: result.Transaction.digest, timeout: 60_000 });
+    return;
+  }
+
+  if (Date.now() < Number(game.closes_at_ms)) return;
 
   const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries?.length ?? 0) > 0;
   const tx = new Transaction();
@@ -56,4 +76,3 @@ while (true) {
   }
   await wait(pollMs);
 }
-

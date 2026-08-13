@@ -10,6 +10,7 @@ use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
 use meteorblox::mtbx::{Self, Refinery, RewardCap};
+use meteorblox::ledger::{Self, Ledger};
 
 const TILE_COUNT: u8 = 25;
 const ROUND_MS: u64 = 60_000;
@@ -32,6 +33,9 @@ const E_CLAIMS_PENDING: u64 = 9;
 const E_REWARDS_NOT_BOUND: u64 = 10;
 const E_REWARDS_ALREADY_BOUND: u64 = 11;
 const E_ROUND_NOT_EMPTY: u64 = 12;
+public struct LedgerCreated has copy, drop {
+    game: ID,
+}
 
 public struct Entry has store {
     player: address,
@@ -126,6 +130,14 @@ public entry fun bind_mtbx_rewards(
     option::fill(&mut game.reward_cap, reward_cap);
 }
 
+/// Creates the shared winnings ledger required by the continuous round
+/// engine. The owner performs this once after upgrading the package.
+public entry fun create_rewards_ledger(game: &Game, ctx: &mut TxContext) {
+    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
+    ledger::create(object::id(game), ctx);
+    event::emit(LedgerCreated { game: object::id(game) });
+}
+
 /// Admin opens the first round, or the next round after every winning entry
 /// from the previous round has claimed.
 public entry fun open_next_round(game: &mut Game, clock: &Clock, ctx: &TxContext) {
@@ -193,7 +205,6 @@ public entry fun settle(
     ctx: &mut TxContext,
 ) {
     assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
-
     let mut occupied = vector[];
     let mut tile = 0;
     while (tile < TILE_COUNT) {
@@ -237,6 +248,99 @@ public entry fun settle(
         gross,
         winner_pool: game.winner_pool_initial,
     });
+}
+
+/// Permissionless keeper operation. It settles an expired occupied round,
+/// credits every winner before any claim, and immediately opens the next
+/// 60-second round. MTBX positions begin refining at settlement time.
+public entry fun settle_and_open_next(
+    game: &mut Game,
+    refinery: &mut Refinery,
+    ledger: &mut Ledger,
+    random_state: &Random,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
+    ledger::assert_game(ledger, object::id(game));
+
+    let mut occupied = vector[];
+    let mut tile = 0;
+    while (tile < TILE_COUNT) {
+        if (*game.tile_totals.borrow(tile as u64) > 0) occupied.push_back(tile);
+        tile = tile + 1;
+    };
+    assert!(!occupied.is_empty(), E_WINNER_EMPTY);
+
+    let mut generator = random::new_generator(random_state, ctx);
+    let occupied_index = generator.generate_u64_in_range(0, occupied.length() - 1);
+    let winner = *occupied.borrow(occupied_index);
+    let gross = balance::value(&game.pot);
+    let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);
+    let mut fee = balance::split(&mut game.pot, protocol_fee);
+    let treasury_amount = mul_div(gross, TREASURY_BPS, BPS);
+    let rewards_amount = mul_div(gross, REWARDS_BPS, BPS);
+    balance::join(&mut game.treasury, balance::split(&mut fee, treasury_amount));
+    balance::join(&mut game.rewards, balance::split(&mut fee, rewards_amount));
+    balance::join(&mut game.ops, fee);
+
+    let winning_total = *game.tile_totals.borrow(winner as u64);
+    let winner_pool = balance::value(&game.pot);
+    let capacity = mtbx::remaining_award_capacity(refinery);
+    let round_mtbx = if (capacity < MTBX_ROUND_REWARD) capacity else MTBX_ROUND_REWARD;
+    let settled_round = game.round;
+    let mut sui_remaining = winner_pool;
+    let mut mtbx_remaining = round_mtbx;
+    let mut winning_left = 0u64;
+    let mut count_i = 0;
+    while (count_i < game.entries.length()) {
+        let entry = game.entries.borrow(count_i);
+        if (entry.round == settled_round && entry.tile == winner) winning_left = winning_left + 1;
+        count_i = count_i + 1;
+    };
+
+    while (!game.entries.is_empty()) {
+        let Entry { player, round, tile: entry_tile, stake, claimed: _ } = game.entries.pop_back();
+        if (round == settled_round && entry_tile == winner) {
+            let sui_amount = if (winning_left == 1) sui_remaining else mul_div(winner_pool, stake, winning_total);
+            let mtbx_amount = if (winning_left == 1) mtbx_remaining else mul_div(round_mtbx, stake, winning_total);
+            ledger::credit(ledger, player, settled_round, balance::split(&mut game.pot, sui_amount));
+            if (mtbx_amount > 0) {
+                mtbx::award_from_game(refinery, option::borrow(&game.reward_cap), player, mtbx_amount, clock);
+            };
+            sui_remaining = sui_remaining - sui_amount;
+            mtbx_remaining = mtbx_remaining - mtbx_amount;
+            winning_left = winning_left - 1;
+            event::emit(WinningsClaimed { player, round: settled_round, amount: sui_amount, mtbx_amount });
+        };
+    };
+
+    event::emit(RoundSettled { round: settled_round, winning_tile: winner, gross, winner_pool });
+    reset_and_open(game, clock);
+}
+
+/// Permissionless keeper operation for a round with no deployments.
+public entry fun close_empty_and_open_next(game: &mut Game, clock: &Clock) {
+    assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
+    assert!(balance::value(&game.pot) == 0 && game.entries.is_empty(), E_ROUND_NOT_EMPTY);
+    event::emit(EmptyRoundClosed { round: game.round });
+    reset_and_open(game, clock);
+}
+
+fun reset_and_open(game: &mut Game, clock: &Clock) {
+    game.round = game.round + 1;
+    game.closes_at_ms = clock.timestamp_ms() + ROUND_MS;
+    game.settled = false;
+    game.winning_tile = option::none();
+    game.winner_pool_initial = 0;
+    game.winning_entries_remaining = 0;
+    game.mtbx_reward_initial = 0;
+    game.mtbx_reward_remaining = 0;
+    let mut i = 0;
+    while (i < TILE_COUNT) {
+        *game.tile_totals.borrow_mut(i as u64) = 0;
+        i = i + 1;
+    };
 }
 
 /// Owner-only recovery for an expired round that received no entries. This
@@ -348,4 +452,3 @@ fun test_fee_math() {
 fun test_mtbx_round_reward_is_quarter_token() {
     assert!(MTBX_ROUND_REWARD == 250_000, 110);
 }
-

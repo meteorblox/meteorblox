@@ -47,6 +47,7 @@ export default function Home() {
   const [activatingGame, setActivatingGame] = useState(false);
   const [roundAction, setRoundAction] = useState(false);
   const [upgradingPackage, setUpgradingPackage] = useState(false);
+  const [publishingPackage, setPublishingPackage] = useState(false);
   const currentAccount = useCurrentAccount();
   const currentAddress = currentAccount?.address;
   const dAppKit = useDAppKit();
@@ -282,6 +283,27 @@ export default function Home() {
     } finally { setUpgradingPackage(false); }
   }
 
+  async function publishCleanTestnetPackage() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(300_000_000);
+    const upgradeCap = transaction.publish({
+      modules: [...upgradeData.modules],
+      dependencies: [...upgradeData.dependencies],
+    });
+    transaction.transferObjects([upgradeCap], currentAccount.address);
+    setPublishingPackage(true);
+    setNotice("Waiting for owner approval to publish a clean METEORBLOX Testnet deployment…");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`Clean METEORBLOX Testnet deployment published. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Clean Testnet publish failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setPublishingPackage(false); }
+  }
+
   async function closeEmptyRound() {
     if (!currentAccount) return setConnectOpen(true);
     if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
@@ -402,7 +424,7 @@ export default function Home() {
           <article className="claim-card sui-claim"><div className="claim-icon sui-claim-icon">S</div><small>CURRENT ROUND WINNINGS</small><strong>{(chainState?.estimatedSuiWinnings ?? 0).toFixed(6)} SUI</strong><span>+ {(chainState?.estimatedMtbxWinnings ?? 0).toFixed(6)} unrefined MTBX</span><button className="deploy sui-button" disabled={roundAction || !(chainState?.claimableWinningEntries)} onClick={claimRoundWinnings}>Claim round rewards</button></article>
         </div>
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <article className="claim-card testnet-publish"><small>OWNER EMPTY-ROUND RECOVERY</small><h2>Recover the expired empty round</h2><p>First approve the package upgrade once. Then close this zero-SUI round and open the next playable round.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for Slush approval…" : "Upgrade Testnet recovery"}</button><button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for Slush approval…" : "Close empty round"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <article className="claim-card testnet-publish"><small>OWNER EMPTY-ROUND RECOVERY</small><h2>Recover the expired empty round</h2><p>The current Game package has no matching UpgradeCap. Publish one clean Testnet deployment, then we will bind the new object IDs to this interface.</p><button className="deploy" disabled={publishingPackage} onClick={publishCleanTestnetPackage}>{publishingPackage ? "Waiting for Slush approval…" : "Publish clean Testnet deployment"}</button><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for Slush approval…" : "Upgrade Testnet recovery (old deployment)"}</button><button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for Slush approval…" : "Close empty round (old deployment)"}</button></article>}
         <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined MTBX" : "Refined MTBX"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}…${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique MTBX RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for Slush approval…" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}

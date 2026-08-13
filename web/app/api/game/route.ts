@@ -1,10 +1,12 @@
-
+Exit code: 0
+Wall time: 0.5 seconds
+Output:
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 
-const gameId = "0xed69d2784a34e80ac206750ddfef18ede5f447aa8c9299c4bc64c81434c1f7fe";
-const refineryId = "0x6d66c03dc8b5d5994af512a66bdc09f2b22917f7c2d19d5430d6867e22c13895";
-const upgradeCapId = "0xe8a428db6b93487e7f59ffe593bb8f6e384e56ecbad5df1fd0ddc1811d1f972c";
-const packageId = "0xc40d6b489086ef619baac0cc2e6396159fe30c235d122e89ce9e7d4c8c2231f7";
+const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257c9";
+const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
+const upgradeCapId = "0xe6759658c4f3e412ee0d88142671eff44c3149a8c188364b1ab0e9ff4fd143a4";
+const packageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 
 type GameEntry = { player: string; round: string; tile: number; stake: string; claimed: boolean };

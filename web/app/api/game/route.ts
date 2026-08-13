@@ -4,6 +4,7 @@ const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257
 const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
 const upgradeCapId = "0xe6759658c4f3e412ee0d88142671eff44c3149a8c188364b1ab0e9ff4fd143a4";
 const packageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
+const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 
 type GameEntry = { player: string; round: string; tile: number; stake: string; claimed: boolean };
@@ -15,6 +16,7 @@ type GameJson = {
 };
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
 type RefineryJson = { positions: Position[]; awarded: string; minted: string; forfeited: string };
+type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };
 
 const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
 const mtbx = (units: bigint) => Number(units) / 1_000_000;
@@ -22,13 +24,15 @@ const mtbx = (units: bigint) => Number(units) / 1_000_000;
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
+      client.core.getObject({ objectId: ledgerId, include: { json: true } }),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
+    const ledger = ledgerObject.json as LedgerJson;
     const now = Date.now();
     const round = BigInt(game.round);
     const winner = game.winning_tile;
@@ -46,9 +50,10 @@ export async function GET(request: Request) {
     const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
     const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
+    const ledgerCredit = address ? ledger.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
 
     return Response.json({
-      packageId, gameId, refineryId, upgradeCapId,
+      packageId, gameId, refineryId, upgradeCapId, ledgerId,
       gameType: (gameObject as { type?: string }).type ?? null,
       refineryType: (refineryObject as { type?: string }).type ?? null,
       upgradeCap: (upgradeCapObject as { json?: unknown }).json ?? null,
@@ -59,6 +64,7 @@ export async function GET(request: Request) {
       claimableWinningEntries: userWinningEntries.length, estimatedSuiWinnings: sui(estimatedSui), estimatedMtbxWinnings: mtbx(estimatedMtbx),
       refinedMtbx: mtbx(refined), unrefinedMtbx: mtbx(unrefined), refinedPositions: refinedPositions.length,
       unrefinedPositions: unrefinedPositions.length,
+      ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),
       nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map((position) => Number(position.matures_at_ms))) : null,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
@@ -66,4 +72,3 @@ export async function GET(request: Request) {
     return Response.json({ error: message }, { status: 502, headers: { "cache-control": "no-store" } });
   }
 }
-

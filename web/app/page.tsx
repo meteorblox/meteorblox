@@ -15,6 +15,7 @@ const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257
 const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
 const rewardCapId = "0x86aa770a5d635470c55f5b17b776a3dc68152228d1146600ffac37035e1f1d80";
 const upgradeCapId = "0xe6759658c4f3e412ee0d88142671eff44c3149a8c188364b1ab0e9ff4fd143a4";
+const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
 const suiClockId = "0x6";
 const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
@@ -24,6 +25,7 @@ type ChainState = {
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
+  ledgerSui: number;
 };
 
 export default function Home() {
@@ -302,6 +304,23 @@ export default function Home() {
     } finally { setCreatingLedger(false); }
   }
 
+  async function claimLedgerSui() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (!(chainState?.ledgerSui ?? 0)) return setNotice("No settled SUI rewards are available to claim.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(25_000_000);
+    transaction.moveCall({ target: `${continuousPackageId}::ledger::claim_sui`, arguments: [transaction.object(ledgerId)] });
+    setRoundAction(true);
+    setNotice("Waiting for wallet approval to claim SUI rewards...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) { setNotice(`SUI rewards claimed. Transaction: ${result.digest}`); await refreshChainState(); }
+    } catch (error) {
+      setNotice(`SUI claim failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setRoundAction(false); }
+  }
+
   async function publishCleanTestnetPackage() {
     if (!currentAccount) return setConnectOpen(true);
     if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
@@ -368,15 +387,7 @@ export default function Home() {
     finally { setRoundAction(false); }
   }
 
-  async function claimMtbx(early: boolean) {
-    if (!currentAccount) return setConnectOpen(true);
-    const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
-    if (!count) return setNotice(early ? "No unrefined MTBX is available for early withdrawal." : "No refined MTBX is available to claim.");
-    const transaction = new Transaction();
-    transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
-    const target = `${packageId}::mtbx::${early ? "claim_early" : "claim_refined"}`;
-    for (let index = 0; index < count; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
-    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} MTBXâ€¦`);
+  async function …195 tokens truncated… "withdraw" : "claim"} MTBXâ€¦`);
     try {
       const result = await executeWithSlush(transaction);
       if (result) { setNotice(`MTBX ${early ? "withdrawal" : "claim"} confirmed. Transaction: ${result.digest}`); await refreshChainState(); }
@@ -440,7 +451,7 @@ export default function Home() {
         <div className="rewards-title"><p className="eyebrow">LIVE SUI TESTNET REWARDS</p><h1>Your SUI and MTBX winnings.</h1><p>Balances below are read from the published Game and Refinery objects. A winning claim sends SUI immediately and starts the MTBX refining period.</p></div>
         <div className="reward-assets">
           <article className="claim-card refining-card"><div className="claim-icon">M</div><small>MTBX REFINERY</small><div className="refinery-balances"><div><span>UNREFINED</span><strong>{(chainState?.unrefinedMtbx ?? 0).toFixed(6)} MTBX</strong></div><div><span>REFINED</span><strong>{(chainState?.refinedMtbx ?? 0).toFixed(6)} MTBX</strong></div></div><div className="refine-time"><span>Next maturity</span><strong>{chainState?.nextMaturityMs ? "Within 24h" : "â€”"}</strong></div><div className="refine-track" aria-label="MTBX refining period"><i /></div><p className="refine-copy">MTBX becomes fully transferable after 24 hours. Early withdrawal mints 90% and permanently forfeits 10%.</p><button className="deploy" disabled={roundAction || !(chainState?.refinedPositions)} onClick={() => claimMtbx(false)}>Claim refined MTBX</button><button className="early-withdraw" disabled={roundAction || !(chainState?.unrefinedPositions)} onClick={() => claimMtbx(true)}>Withdraw unrefined early</button><p className="penalty-copy"><strong>10% penalty</strong> applies only to early withdrawal.</p></article>
-          <article className="claim-card sui-claim"><div className="claim-icon sui-claim-icon">S</div><small>CURRENT ROUND WINNINGS</small><strong>{(chainState?.estimatedSuiWinnings ?? 0).toFixed(6)} SUI</strong><span>+ {(chainState?.estimatedMtbxWinnings ?? 0).toFixed(6)} unrefined MTBX</span><button className="deploy sui-button" disabled={roundAction || !(chainState?.claimableWinningEntries)} onClick={claimRoundWinnings}>Claim round rewards</button></article>
+          <article className="claim-card sui-claim"><div className="claim-icon sui-claim-icon">S</div><small>SETTLED SUI REWARDS</small><strong>{(chainState?.ledgerSui ?? 0).toFixed(6)} SUI</strong><span>Credited automatically after each settlement</span><button className="deploy sui-button" disabled={roundAction || !(chainState?.ledgerSui)} onClick={claimLedgerSui}>Claim SUI</button></article>
         </div>
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Enable continuous 60-second rounds</h2><p>The continuous package is upgraded. Create its separate on-chain Rewards Ledger to finish this milestone.</p><button className="deploy" disabled>Step 1: Upgrade complete</button><button className="deploy" disabled={creatingLedger} onClick={createRewardsLedger}>{creatingLedger ? "Waiting for Slush approval..." : "Step 2: Create Rewards Ledger"}</button>{!chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for Slush approval..." : "Close current empty round"}</button>}</article>}

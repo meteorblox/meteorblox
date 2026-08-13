@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vinext/
+.wrangler/
+.sites-runtime/
+output/
+build/
+tsconfig.tsbuildinfo
+*.tar.gz
+.env
+.env.*
+!.env.example

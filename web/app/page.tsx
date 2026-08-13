@@ -46,6 +46,7 @@ export default function Home() {
   const [activatingGame, setActivatingGame] = useState(false);
   const [roundAction, setRoundAction] = useState(false);
   const [upgradingPackage, setUpgradingPackage] = useState(false);
+  const [creatingLedger, setCreatingLedger] = useState(false);
   const [publishingPackage, setPublishingPackage] = useState(false);
   const currentAccount = useCurrentAccount();
   const currentAddress = currentAccount?.address;
@@ -272,7 +273,6 @@ export default function Home() {
       ticket,
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
-    transaction.moveCall({ target: `${packageId}::game::create_rewards_ledger`, arguments: [transaction.object(gameId)] });
     setUpgradingPackage(true);
     setNotice("Waiting for the owner wallet to approve the continuous-round Testnet upgradeâ€¦");
     try {
@@ -281,6 +281,23 @@ export default function Home() {
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
+  }
+
+  async function createRewardsLedger() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(50_000_000);
+    transaction.moveCall({ target: `${packageId}::game::create_rewards_ledger`, arguments: [transaction.object(gameId)] });
+    setCreatingLedger(true);
+    setNotice("Waiting for owner approval to create the Rewards Ledger...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`Rewards Ledger created. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Rewards Ledger creation failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setCreatingLedger(false); }
   }
 
   async function publishCleanTestnetPackage() {
@@ -424,7 +441,7 @@ export default function Home() {
           <article className="claim-card sui-claim"><div className="claim-icon sui-claim-icon">S</div><small>CURRENT ROUND WINNINGS</small><strong>{(chainState?.estimatedSuiWinnings ?? 0).toFixed(6)} SUI</strong><span>+ {(chainState?.estimatedMtbxWinnings ?? 0).toFixed(6)} unrefined MTBX</span><button className="deploy sui-button" disabled={roundAction || !(chainState?.claimableWinningEntries)} onClick={claimRoundWinnings}>Claim round rewards</button></article>
         </div>
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Enable continuous 60-second rounds</h2><p>Upgrade the clean Testnet package and create its on-chain Rewards Ledger in one owner-approved transaction.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for Slush approvalâ€¦" : "Upgrade continuous Testnet engine"}</button>{!chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for Slush approvalâ€¦" : "Close current empty round"}</button>}</article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Enable continuous 60-second rounds</h2><p>Step 1 upgrades the Testnet package. After it succeeds, Step 2 creates the separate on-chain Rewards Ledger.</p><button className="deploy" disabled={upgradingPackage || creatingLedger} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for Slush approval..." : "Step 1: Upgrade continuous engine"}</button><button className="deploy" disabled={upgradingPackage || creatingLedger} onClick={createRewardsLedger}>{creatingLedger ? "Waiting for Slush approval..." : "Step 2: Create Rewards Ledger"}</button>{!chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for Slush approval..." : "Close current empty round"}</button>}</article>}
         <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined MTBX" : "Refined MTBX"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}...${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique MTBX RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for Slush approvalâ€¦" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}

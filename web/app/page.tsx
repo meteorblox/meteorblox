@@ -1,9 +1,9 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConnectWallet, useCurrentAccount, useCurrentWallet, useDisconnectWallet, useWallets } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
-import { signAndExecuteTransaction } from "@mysten/wallet-standard";
 import { upgradeData } from "./upgrade-data";
 
 const tiles = Array.from({ length: 25 }, (_, index) => index + 1);
@@ -49,18 +49,21 @@ export default function Home() {
   const [upgradingPackage, setUpgradingPackage] = useState(false);
   const currentAccount = useCurrentAccount();
   const currentAddress = currentAccount?.address;
-  const { currentWallet } = useCurrentWallet();
+  const dAppKit = useDAppKit();
+  const walletConnection = useWalletConnection();
   const wallets = useWallets();
-  const { mutate: connect, isPending: connecting } = useConnectWallet();
-  const { mutate: disconnect } = useDisconnectWallet();
+  const connecting = walletConnection.isConnecting;
   const slushWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("slush"));
   const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush"));
 
-  function connectWallet(wallet: (typeof wallets)[number]) {
-    connect({ wallet }, {
-      onSuccess: () => { setConnectOpen(false); setNotice("Sui Testnet wallet connected."); },
-      onError: (error) => setNotice(`Connection cancelled: ${error.message}`),
-    });
+  async function connectWallet(wallet: (typeof wallets)[number]) {
+    try {
+      await dAppKit.connectWallet({ wallet });
+      setConnectOpen(false);
+      setNotice("Sui Testnet wallet connected.");
+    } catch (error) {
+      setNotice(`Connection cancelled: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    }
   }
 
   useEffect(() => {
@@ -170,11 +173,11 @@ export default function Home() {
 
   async function executeWithSlush(transaction: Transaction) {
     if (!currentAccount) { setConnectOpen(true); return null; }
-    if (!currentWallet?.features["sui:signAndExecuteTransaction"]) {
-      setNotice("Connect Slush on Sui Testnet before submitting.");
-      return null;
+    const result = await dAppKit.signAndExecuteTransaction({ transaction });
+    if ("FailedTransaction" in result) {
+      throw new Error(result.FailedTransaction.status.error?.message ?? "Transaction failed on Sui Testnet.");
     }
-    return signAndExecuteTransaction(currentWallet, { transaction, account: currentAccount, chain: "sui:testnet" });
+    return { digest: result.Transaction.digest };
   }
 
   async function deploy() {
@@ -425,7 +428,7 @@ export default function Home() {
         <dl className="account-details"><div><dt>Address</dt><dd><span>{`${currentAccount.address.slice(0, 8)}…${currentAccount.address.slice(-6)}`}</span><button aria-label="Copy wallet address" onClick={copyAddress}>Copy</button></dd></div><div><dt>Network</dt><dd><span className="account-network"><i /> Sui Testnet</span></dd></div><div><dt>Wallet</dt><dd>Slush</dd></div></dl>
         <section className="account-portfolio"><h3>Portfolio</h3><dl><div><dt>SUI deployed</dt><dd>{lifetimeDeployed.toFixed(4)} SUI</dd></div><div><dt>MTBX refined</dt><dd>On-chain</dd></div><div><dt>MTBX unrefined</dt><dd>On-chain</dd></div><div className="portfolio-total"><dt>Game access</dt><dd>Live Testnet</dd></div></dl></section>
         <a className="account-explorer" href={`https://suiscan.xyz/testnet/account/${currentAccount.address}`} target="_blank" rel="noreferrer">View wallet on SuiScan ↗</a>
-        <button className="account-disconnect" onClick={() => { disconnect(); setAccountOpen(false); setNotice("Wallet disconnected."); }}>Disconnect wallet</button>
+        <button className="account-disconnect" onClick={() => { void dAppKit.disconnectWallet(); setAccountOpen(false); setNotice("Wallet disconnected."); }}>Disconnect wallet</button>
       </aside></div>}
     </main>
   );

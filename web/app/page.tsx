@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentAccount, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 import { upgradeData } from "./upgrade-data";
@@ -48,6 +48,8 @@ export default function Home() {
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
   const [chainLoading, setChainLoading] = useState(true);
+  const refreshInFlight = useRef(false);
+  const latestRound = useRef(-1);
   const [submittingPlay, setSubmittingPlay] = useState(false);
   const [activatingGame, setActivatingGame] = useState(false);
   const [roundAction, setRoundAction] = useState(false);
@@ -89,17 +91,25 @@ export default function Home() {
   }, []);
 
   const refreshChainState = useCallback(async () => {
-    setChainLoading(true);
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     try {
       const query = currentAddress ? `?address=${encodeURIComponent(currentAddress)}` : "";
       const response = await fetch(`/api/game${query}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to read Sui Testnet");
-      setChainState(data as ChainState);
-      setTileAmounts((data as ChainState).tileTotals);
+      const next = data as ChainState;
+      if (next.round >= latestRound.current) {
+        latestRound.current = next.round;
+        setChainState(next);
+        setTileAmounts(next.tileTotals);
+      }
     } catch (error) {
       setNotice(error instanceof Error ? `Chain state unavailable: ${error.message}` : "Chain state unavailable.");
-    } finally { setChainLoading(false); }
+    } finally {
+      refreshInFlight.current = false;
+      setChainLoading(false);
+    }
   }, [currentAddress]);
 
   useEffect(() => {

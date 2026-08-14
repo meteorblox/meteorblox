@@ -37,7 +37,7 @@ export default function Home() {
   const [amount, setAmount] = useState("0.01");
   const [tileCountInput, setTileCountInput] = useState("0");
   const [rounds, setRounds] = useState(1);
-  const [seconds, setSeconds] = useState(42);
+  const [seconds, setSeconds] = useState(60);
   const [notice, setNotice] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -104,7 +104,7 @@ export default function Home() {
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refreshChainState(), 0);
-    const timer = window.setInterval(() => void refreshChainState(), 12_000);
+    const timer = window.setInterval(() => void refreshChainState(), 2_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, [refreshChainState]);
 

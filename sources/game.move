@@ -170,23 +170,35 @@ public entry fun place(
     clock: &Clock,
     ctx: &TxContext,
 ) {
+    place_for(game, tile, coin::into_balance(payment), tx_context::sender(ctx), clock);
+}
+
+/// Package-only entry path used by the funded autoplay registry. The player
+/// remains the plan owner even though a permissionless keeper executes it.
+public(package) fun place_for(
+    game: &mut Game,
+    tile: u8,
+    payment: Balance<SUI>,
+    player: address,
+    clock: &Clock,
+) {
     assert!(!game.settled && clock.timestamp_ms() < game.closes_at_ms, E_ROUND_CLOSED);
     assert!(tile < TILE_COUNT, E_INVALID_TILE);
 
-    let amount = coin::value(&payment);
+    let amount = balance::value(&payment);
     assert!(amount > 0, E_ZERO_STAKE);
-    balance::join(&mut game.pot, coin::into_balance(payment));
+    balance::join(&mut game.pot, payment);
     *game.tile_totals.borrow_mut(tile as u64) =
         *game.tile_totals.borrow(tile as u64) + amount;
     game.entries.push_back(Entry {
-        player: tx_context::sender(ctx),
+        player,
         round: game.round,
         tile,
         stake: amount,
         claimed: false,
     });
     event::emit(EntryPlaced {
-        player: tx_context::sender(ctx),
+        player,
         round: game.round,
         tile,
         amount,

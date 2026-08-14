@@ -10,6 +10,8 @@ const randomId = "0x8";
 const clockId = "0x6";
 const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
+const autoplayRegistryId = process.env.SUI_AUTOPLAY_REGISTRY_ID;
+let lastAutoplayRound = -1n;
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
 
@@ -42,9 +44,27 @@ async function tick() {
     return;
   }
 
+  const currentRound = BigInt(game.round);
+  if (autoplayRegistryId && currentRound !== lastAutoplayRound && Date.now() < Number(game.closes_at_ms)) {
+    const autoplayTx = new Transaction();
+    autoplayTx.setSender(keypair.toSuiAddress());
+    autoplayTx.setGasBudget(100_000_000);
+    autoplayTx.moveCall({
+      target: `${packageId}::autoplay::execute_round`,
+      arguments: [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(clockId)],
+    });
+    const autoplayResult = await keypair.signAndExecuteTransaction({ transaction: autoplayTx, client });
+    if (autoplayResult.$kind === "FailedTransaction") {
+      throw new Error(autoplayResult.FailedTransaction.status.error?.message ?? "Autoplay execution failed");
+    }
+    lastAutoplayRound = currentRound;
+    console.log(`[keeper] Executed autoplay plans for round ${currentRound}. Transaction: ${autoplayResult.Transaction.digest}`);
+    await client.core.waitForTransaction({ digest: autoplayResult.Transaction.digest, timeout: 60_000 });
+    return;
+  }
+
   if (Date.now() < Number(game.closes_at_ms)) return;
 
-  const currentRound = BigInt(game.round);
   const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries ?? []).some((entry) => BigInt(entry.round) === currentRound);
   const tx = new Transaction();
   tx.setSender(keypair.toSuiAddress());
@@ -77,3 +97,4 @@ while (true) {
   }
   await wait(pollMs);
 }
+

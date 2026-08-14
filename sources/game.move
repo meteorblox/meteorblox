@@ -469,4 +469,3 @@ fun test_fee_math() {
 fun test_mtbx_round_reward_is_quarter_token() {
     assert!(MTBX_ROUND_REWARD == 250_000, 110);
 }
-

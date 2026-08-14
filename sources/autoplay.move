@@ -149,4 +149,3 @@ public entry fun cancel_plan(registry: &mut Registry, plan_id: u64, ctx: &mut Tx
 }
 
 public fun plan_count(registry: &Registry): u64 { registry.plans.length() }
-

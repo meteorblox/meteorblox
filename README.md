@@ -47,10 +47,9 @@ blocks the game. Empty expired rounds roll forward with
 ## Funded autoplay
 
 The `autoplay` module lets a player authorize several future rounds once. A
-plan escrows exactly `amount per tile Ã— tile count Ã— rounds` in the shared
+plan escrows exactly `amount per tile × tile count × rounds` in the shared
 registry; the keeper then deploys the selected tiles once per newly opened
 round while every entry remains credited to the plan owner. Repeated keeper
 calls are idempotent for the same round. Owners can cancel by stable plan ID
 and immediately recover all unspent SUI. Finished and cancelled plans are
 removed from the active registry so keeper gas does not grow forever.
-

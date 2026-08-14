@@ -23,7 +23,7 @@ const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
 
 type ChainState = {
-  round: number; closesAtMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
+  round: number; closesAtMs: number; remainingMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
@@ -50,6 +50,7 @@ export default function Home() {
   const [chainLoading, setChainLoading] = useState(true);
   const refreshInFlight = useRef(false);
   const latestRound = useRef(-1);
+  const roundDeadline = useRef(Date.now() + 60_000);
   const [submittingPlay, setSubmittingPlay] = useState(false);
   const [activatingGame, setActivatingGame] = useState(false);
   const [roundAction, setRoundAction] = useState(false);
@@ -76,11 +77,11 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const update = () => setSeconds(chainState?.settled ? 0 : Math.max(0, Math.ceil(((chainState?.closesAtMs ?? Date.now()) - Date.now()) / 1000)));
+    const update = () => setSeconds(chainState?.settled ? 0 : Math.max(0, Math.ceil((roundDeadline.current - Date.now()) / 1000)));
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [chainState?.closesAtMs, chainState?.settled]);
+  }, [chainState?.round, chainState?.remainingMs, chainState?.settled]);
 
   useEffect(() => {
     let active = true;
@@ -101,6 +102,7 @@ export default function Home() {
       const next = data as ChainState;
       if (next.round >= latestRound.current) {
         latestRound.current = next.round;
+        roundDeadline.current = Date.now() + next.remainingMs;
         setChainState(next);
         setTileAmounts(next.tileTotals);
       }

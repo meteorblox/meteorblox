@@ -322,7 +322,12 @@ public entry fun settle_and_open_next(
 /// Permissionless keeper operation for a round with no deployments.
 public entry fun close_empty_and_open_next(game: &mut Game, clock: &Clock) {
     assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
-    assert!(balance::value(&game.pot) == 0 && game.entries.is_empty(), E_ROUND_NOT_EMPTY);
+    assert!(balance::value(&game.pot) == 0, E_ROUND_NOT_EMPTY);
+    let mut i = 0;
+    while (i < game.entries.length()) {
+        assert!(game.entries.borrow(i).round != game.round, E_ROUND_NOT_EMPTY);
+        i = i + 1;
+    };
     event::emit(EmptyRoundClosed { round: game.round });
     reset_and_open(game, clock);
 }
@@ -452,3 +457,4 @@ fun test_fee_math() {
 fun test_mtbx_round_reward_is_quarter_token() {
     assert!(MTBX_ROUND_REWARD == 250_000, 110);
 }
+

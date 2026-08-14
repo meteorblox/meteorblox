@@ -49,5 +49,8 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 cd "${project_root}"
+if [[ "$1" == *.sh && ! -x "$1" ]]; then
+  exec bash "$@"
+fi
 exec "$@"
 

@@ -43,3 +43,13 @@ SUI and unrefined MTBX, and immediately opens the next round.
 Players withdraw accumulated SUI later with `ledger::claim_sui`; claiming never
 blocks the game. Empty expired rounds roll forward with
 `game::close_empty_and_open_next`.
+
+## Funded autoplay
+
+The `autoplay` module lets a player authorize several future rounds once. A
+plan escrows exactly `amount per tile × tile count × rounds` in the shared
+registry; the keeper then deploys the selected tiles once per newly opened
+round while every entry remains credited to the plan owner. Repeated keeper
+calls are idempotent for the same round. Owners can cancel by stable plan ID
+and immediately recover all unspent SUI. Finished and cancelled plans are
+removed from the active registry so keeper gas does not grow forever.

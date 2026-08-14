@@ -16,7 +16,7 @@ type GameJson = {
 };
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
 type RefineryJson = { positions: Position[]; awarded: string; minted: string; forfeited: string };
-type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };
+type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };\ntype RoundSettledJson = { round?: string | number; winning_tile?: string | number; gross?: string; winner_pool?: string };
 
 const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
 const mtbx = (units: bigint) => Number(units) / 1_000_000;
@@ -24,11 +24,11 @@ const mtbx = (units: bigint) => Number(units) / 1_000_000;
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, settledEvents] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
-      client.core.getObject({ objectId: ledgerId, include: { json: true } }),
+      client.core.getObject({ objectId: ledgerId, include: { json: true } }),\n      client.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
     const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-    const ledgerCredit = address ? ledger.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
+    const ledgerCredit = address ? ledger.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;\n    const lastEvent = settledEvents.events[0];\n    const lastJson = (lastEvent?.json ?? null) as RoundSettledJson | null;\n    const lastRound = lastJson ? {\n      round: Number(lastJson.round ?? 0), winningTile: Number(lastJson.winning_tile ?? 0) + 1,\n      deployedSui: sui(BigInt(lastJson.gross ?? "0")), rewardPoolSui: sui(BigInt(lastJson.winner_pool ?? "0")),\n      mtbxAwarded: 0.25, transaction: lastEvent?.transactionDigest ?? null,\n    } : null;
 
     return Response.json({
       packageId, gameId, refineryId, upgradeCapId, ledgerId,
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       claimableWinningEntries: userWinningEntries.length, estimatedSuiWinnings: sui(estimatedSui), estimatedMtbxWinnings: mtbx(estimatedMtbx),
       refinedMtbx: mtbx(refined), unrefinedMtbx: mtbx(unrefined), refinedPositions: refinedPositions.length,
       unrefinedPositions: unrefinedPositions.length,
-      ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),
+      ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),\n      lastRound,
       nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map((position) => Number(position.matures_at_ms))) : null,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {

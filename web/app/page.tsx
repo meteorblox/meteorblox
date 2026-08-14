@@ -43,7 +43,7 @@ export default function Home() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
-  const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");
+  const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");\r\n  const [lastRoundOpen, setLastRoundOpen] = useState(false);
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
@@ -440,6 +440,20 @@ export default function Home() {
         <div><small>ROUND</small><strong>{chainLoading ? "-" : `#${String(chainState?.round ?? 0).padStart(6, "0")}`}</strong></div><div><small>TIME LEFT</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></div>
         <div><small>DEPLOYED</small><strong className="deployed-total"><i className="round-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{chainLoading ? "-" : (chainState?.potSui ?? 0).toFixed(4)}</strong></div>
         <div><small>METEOR SHOWER</small><strong className="meteor-shower-total"><i className="round-meteor-icon" aria-hidden="true"><i /><b /></i>{mtbxRoundReward.toFixed(2)}</strong></div>
+      </section>
+
+      <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
+        <button className="last-round-toggle" type="button" aria-expanded={lastRoundOpen} onClick={() => setLastRoundOpen((open) => !open)}>
+          <span><small>LAST ROUND</small><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")}` : "Waiting for settlement"}</strong></span>
+          {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "−" : "+"}</i></span>}
+        </button>
+        {lastRoundOpen && <div className="last-round-details">{chainState?.lastRound ? <>
+          <div><small>WINNING BLOCK</small><strong>{chainState.lastRound.winningTile}</strong></div>
+          <div><small>DEPLOYED</small><strong>{chainState.lastRound.deployedSui.toFixed(4)} SUI</strong></div>
+          <div><small>SUI REWARD POOL</small><strong>{chainState.lastRound.rewardPoolSui.toFixed(4)} SUI</strong></div>
+          <div><small>MTBX AWARDED</small><strong>{chainState.lastRound.mtbxAwarded.toFixed(2)} MTBX</strong></div>
+          {chainState.lastRound.transaction && <a href={`https://testnet.suivision.xyz/txblock/${chainState.lastRound.transaction}`} target="_blank" rel="noreferrer">View settlement ↗</a>}
+        </> : <p>The first completed round will appear here automatically.</p>}</div>}
       </section>
 
       {view === "mine" ? <div className="workspace">

@@ -43,7 +43,8 @@ export default function Home() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
-  const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");\r\n  const [lastRoundOpen, setLastRoundOpen] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");
+  const [lastRoundOpen, setLastRoundOpen] = useState(false);
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);

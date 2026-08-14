@@ -2,7 +2,7 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 
-const packageId = "0x92ced0ea9bd54cffec3e6472c2c9b235a06b4a5ec70092c41cebfa2cd2e54d16";
+const packageId = "0x9073976791cd99b492144abc91268709b241dfc9f9c142c72490f9b0cee02c3e";
 const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257c9";
 const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
 const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
@@ -44,7 +44,8 @@ async function tick() {
 
   if (Date.now() < Number(game.closes_at_ms)) return;
 
-  const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries?.length ?? 0) > 0;
+  const currentRound = BigInt(game.round);
+  const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries ?? []).some((entry) => BigInt(entry.round) === currentRound);
   const tx = new Transaction();
   tx.setSender(keypair.toSuiAddress());
   tx.setGasBudget(50_000_000);

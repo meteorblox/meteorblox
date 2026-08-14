@@ -381,11 +381,23 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
     transaction.moveCall({ target: `${packageId}::game::open_next_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
-    setRoundAction(true); setNotice("Waiting for owner approval to open the next roundâ€¦");
+    setRoundAction(true); setNotice("Waiting for owner approval to open the next round...");
     try {
       const result = await executeWithSlush(transaction);
       if (result) { setNotice(`Next round opened. Transaction: ${result.digest}`); await refreshChainState(); }
-    } catch (error) { setNotice(`Open round failed: ${error instanceof Error ? error.message : "Unexpected …220 tokens truncated…} MTBXâ€¦`);
+    } catch (error) { setNotice(`Open round failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`); }
+    finally { setRoundAction(false); }
+  }
+
+  async function claimMtbx(early: boolean) {
+    if (!currentAccount) return setConnectOpen(true);
+    const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
+    if (!count) return setNotice(early ? "No unrefined MTBX is available for early withdrawal." : "No refined MTBX is available to claim.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
+    const target = `${packageId}::mtbx::${early ? "claim_early" : "claim_refined"}`;
+    for (let index = 0; index < count; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
+    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} MTBX...`);
     try {
       const result = await executeWithSlush(transaction);
       if (result) { setNotice(`MTBX ${early ? "withdrawal" : "claim"} confirmed. Transaction: ${result.digest}`); await refreshChainState(); }

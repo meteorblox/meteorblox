@@ -5,6 +5,8 @@ import { useCurrentAccount, useDAppKit, useWalletConnection, useWallets } from "
 import { Transaction } from "@mysten/sui/transactions";
 import { upgradeData } from "./upgrade-data";
 
+// The current Testnet upgrade includes the automatic empty-round rollover fix.
+
 const tiles = Array.from({ length: 25 }, (_, index) => index + 1);
 const mtbxRoundReward = 0.25;
 const testnetOwner = "0x55f035832afb21499461d62630ed4b1cdf6e53b2a43f907e6db55a91eb114781";
@@ -383,11 +385,7 @@ export default function Home() {
     try {
       const result = await executeWithSlush(transaction);
       if (result) { setNotice(`Next round opened. Transaction: ${result.digest}`); await refreshChainState(); }
-    } catch (error) { setNotice(`Open round failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`); }
-    finally { setRoundAction(false); }
-  }
-
-  async function …200 tokens truncated…} MTBXâ€¦`);
+    } catch (error) { setNotice(`Open round failed: ${error instanceof Error ? error.message : "Unexpected …220 tokens truncated…} MTBXâ€¦`);
     try {
       const result = await executeWithSlush(transaction);
       if (result) { setNotice(`MTBX ${early ? "withdrawal" : "claim"} confirmed. Transaction: ${result.digest}`); await refreshChainState(); }

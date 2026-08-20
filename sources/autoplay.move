@@ -96,9 +96,38 @@ public entry fun create_plan(
     event::emit(PlanCreated { registry: object::id(registry), plan_id, owner, rounds, amount_per_tile, tile_count });
 }
 
-/// Called by the keeper after a round opens. At most one deployment per plan
-/// can occur in a round, so retries and keeper restarts are safe.
-public entry fun execute_round(
+/// Retained with its original signature for package upgrade compatibility.
+public entry fun execute_round(registry: &mut Registry, game: &mut Game, clock: &Clock) {
+    let current_round = game::round(game);
+    let registry_id = object::id(registry);
+    let mut index = 0;
+    while (index < registry.plans.length()) {
+        let plan = registry.plans.borrow_mut(index);
+        if (plan.active && plan.rounds_remaining > 0 && plan.last_round_played < current_round) {
+            let owner = plan.owner;
+            let plan_id = plan.plan_id;
+            let mut tile_index = 0;
+            while (tile_index < plan.tiles.length()) {
+                let payment = balance::split(&mut plan.funds, plan.amount_per_tile);
+                game::place_for(game, *plan.tiles.borrow(tile_index), payment, owner, clock);
+                tile_index = tile_index + 1;
+            };
+            plan.rounds_remaining = plan.rounds_remaining - 1;
+            plan.last_round_played = current_round;
+            if (plan.rounds_remaining == 0) plan.active = false;
+            event::emit(PlanExecuted { registry: registry_id, plan_id, owner, round: current_round });
+        };
+        if (!plan.active) {
+            let Plan { plan_id: _, owner: _, tiles: _, amount_per_tile: _, rounds_remaining: _, last_round_played: _, funds, active: _ } = registry.plans.swap_remove(index);
+            balance::destroy_zero(funds);
+        } else {
+            index = index + 1;
+        };
+    };
+}
+
+/// Executes each plan on a fresh random set of blocks for the round.
+public entry fun execute_random_round(
     registry: &mut Registry,
     game: &mut Game,
     random_state: &Random,

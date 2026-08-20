@@ -165,14 +165,16 @@ export default function Home() {
 
   function selectTileCount(requested: number) {
     const count = Math.max(0, Math.min(25, Math.floor(requested || 0)));
+    const shuffled = [...tiles];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const random = new Uint32Array(1);
+      window.crypto.getRandomValues(random);
+      const swapIndex = random[0] % (index + 1);
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
     setTileCountInput(String(count));
-    setSelected((current) => {
-      const kept = current.slice(0, count);
-      if (kept.length === count) return kept;
-      const available = tiles.filter((tile) => !kept.includes(tile));
-      return [...kept, ...available.slice(0, count - kept.length)];
-    });
-    setNotice("");
+    setSelected(shuffled.slice(0, count).sort((left, right) => left - right));
+    setNotice(count ? `Randomly selected ${count} unique block${count === 1 ? "" : "s"}.` : "");
   }
 
   function toggleAllTiles() {

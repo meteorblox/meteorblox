@@ -65,7 +65,8 @@ export async function GET(request: Request) {
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({
       planId: Number(plan.plan_id), roundsRemaining: Number(plan.rounds_remaining),
-      tileCount: plan.tiles.length, amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
+      tiles: plan.tiles.map((tile) => tile + 1), tileCount: plan.tiles.length,
+      amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
       fundedSui: sui(BigInt(plan.funds)), lastRoundPlayed: Number(plan.last_round_played),
     })) : [];
     const lastEvent = settledEvents.events[0];

@@ -10,7 +10,7 @@ const randomId = "0x8";
 const clockId = "0x6";
 const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
-const autoplayRegistryId = process.env.SUI_AUTOPLAY_REGISTRY_ID;
+const autoplayRegistryId = "0xa29d4d7894478dd7f2ba3f042c02c9a738d8fbec8ce60eb465837dac9c4befa2";
 let lastAutoplayRound = -1n;
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");

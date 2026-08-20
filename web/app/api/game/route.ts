@@ -1,10 +1,10 @@
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
 
-const gameId = "0xbf0cc524c08bb56d806c2e760b9b1de2c757a74aed3034737a5784cb292257c9";
-const refineryId = "0x26588ea54aa0a0be7081177c172e7e5fa7dfb986a53aa672f66b77a092b90c71";
-const upgradeCapId = "0xe6759658c4f3e412ee0d88142671eff44c3149a8c188364b1ab0e9ff4fd143a4";
-const packageId = "0x047f8192cfa30e82a75546a064e8c56ae5d3364d70faa350de4c44b28cfd9d99";
+const gameId = "0xd9fcf2c789432d7ad59ff04918880d96842f4a42cd3032616829ca383816ac6f";
+const refineryId = "0xb59cb6847c8e7582bce7d762aff44012aa9babe38cb0be7634aecc644e732d4c";
+const upgradeCapId = "0x9cff31debda813ddc8b4997143ca9ed60f4f1b75147a9dd99f33948fc28acc2d";
+const packageId = "0x46682f6d7f3c459cbd9859575cd610e5468cdc7959fc1c2b9db45b029a84274d";
 const typeOriginPackageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
 const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
 const autoplayRegistryId = process.env.SUI_AUTOPLAY_REGISTRY_ID ?? process.env.NEXT_PUBLIC_SUI_AUTOPLAY_REGISTRY_ID ?? "";

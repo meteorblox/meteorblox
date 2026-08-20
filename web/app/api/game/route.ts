@@ -21,12 +21,13 @@ type GameJson = {
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
 type RefineryJson = { positions: Position[]; awarded: string; minted: string; forfeited: string };
 type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };
-type AutoplayPlanJson = { plan_id: string; owner: string; tiles: number[]; amount_per_tile: string; rounds_remaining: string; last_round_played: string; funds: string; active: boolean };
+type AutoplayPlanJson = { plan_id: string; owner: string; tiles: string | number[]; amount_per_tile: string; rounds_remaining: string; last_round_played: string; funds: string; active: boolean };
 type AutoplayRegistryJson = { plans: AutoplayPlanJson[]; next_plan_id: string };
 type RoundSettledJson = { round?: string | number; winning_tile?: string | number; gross?: string; winner_pool?: string };
 
 const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
 const mtbx = (units: bigint) => Number(units) / 1_000_000;
+const decodeTiles = (value: string | number[]) => Array.isArray(value) ? value : Array.from(Uint8Array.from(atob(value), (character) => character.charCodeAt(0)));
 
 export async function GET(request: Request) {
   try {
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({
       planId: Number(plan.plan_id), roundsRemaining: Number(plan.rounds_remaining),
-      tiles: plan.tiles.map((tile) => tile + 1), tileCount: plan.tiles.length,
+      tiles: decodeTiles(plan.tiles).map((tile) => tile + 1), tileCount: decodeTiles(plan.tiles).length,
       amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
       fundedSui: sui(BigInt(plan.funds)), lastRoundPlayed: Number(plan.last_round_played),
     })) : [];

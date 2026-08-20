@@ -4,6 +4,7 @@ use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
+use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
@@ -97,19 +98,34 @@ public entry fun create_plan(
 
 /// Called by the keeper after a round opens. At most one deployment per plan
 /// can occur in a round, so retries and keeper restarts are safe.
-public entry fun execute_round(registry: &mut Registry, game: &mut Game, clock: &Clock) {
+public entry fun execute_round(
+    registry: &mut Registry,
+    game: &mut Game,
+    random_state: &Random,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
     let current_round = game::round(game);
     let registry_id = object::id(registry);
+    let mut generator = random::new_generator(random_state, ctx);
     let mut index = 0;
     while (index < registry.plans.length()) {
         let plan = registry.plans.borrow_mut(index);
         if (plan.active && plan.rounds_remaining > 0 && plan.last_round_played < current_round) {
             let owner = plan.owner;
             let plan_id = plan.plan_id;
+            let mut available = vector[];
+            let mut candidate = 0;
+            while (candidate < TILE_COUNT) {
+                available.push_back(candidate);
+                candidate = candidate + 1;
+            };
             let mut tile_index = 0;
             while (tile_index < plan.tiles.length()) {
+                let random_index = generator.generate_u64_in_range(0, available.length() - 1);
+                let random_tile = available.swap_remove(random_index);
                 let payment = balance::split(&mut plan.funds, plan.amount_per_tile);
-                game::place_for(game, *plan.tiles.borrow(tile_index), payment, owner, clock);
+                game::place_for(game, random_tile, payment, owner, clock);
                 tile_index = tile_index + 1;
             };
             plan.rounds_remaining = plan.rounds_remaining - 1;

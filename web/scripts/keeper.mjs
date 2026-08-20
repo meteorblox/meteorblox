@@ -5,7 +5,7 @@ import { Transaction } from "@mysten/sui/transactions";
 const packageId = "0x46682f6d7f3c459cbd9859575cd610e5468cdc7959fc1c2b9db45b029a84274d";
 const gameId = "0xd9fcf2c789432d7ad59ff04918880d96842f4a42cd3032616829ca383816ac6f";
 const refineryId = "0xb59cb6847c8e7582bce7d762aff44012aa9babe38cb0be7634aecc644e732d4c";
-const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
+const ledgerId = "0x09572f31a4c488a6d3995b15cf0ef406435372050bc411f98994d8db9c160171";
 const randomId = "0x8";
 const clockId = "0x6";
 const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));

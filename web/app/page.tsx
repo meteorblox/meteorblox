@@ -169,8 +169,10 @@ export default function Home() {
     for (let index = shuffled.length - 1; index > 0; index -= 1) {
       const random = new Uint32Array(1);
       window.crypto.getRandomValues(random);
-      const swapIndex = random[0] % (index + 1);
-      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+      const swapIndex = (random[0] ?? 0) % (index + 1);
+      const current = shuffled[index]!;
+      shuffled[index] = shuffled[swapIndex]!;
+      shuffled[swapIndex] = current;
     }
     setTileCountInput(String(count));
     setSelected(shuffled.slice(0, count).sort((left, right) => left - right));

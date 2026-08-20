@@ -29,6 +29,7 @@ type ChainState = {
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
   ledgerSui: number;
+  playedTiles: number[];
   autoplayPlans: Array<{ planId: number; roundsRemaining: number; tiles: number[]; tileCount: number; amountPerTileSui: number; fundedSui: number; lastRoundPlayed: number }>;
   lastRound: { round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; mtbxAwarded: number; transaction: string | null } | null;
 };
@@ -496,7 +497,7 @@ export default function Home() {
             {tiles.map((tile) => {
               const isSelected = selected.includes(tile);
               const previewAmount = tileAmounts[tile - 1] + (isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0);
-              return <button key={tile} className={isSelected ? "tile selected" : "tile"} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
+              return <button key={tile} className={isSelected ? "tile selected" : isPlayed ? "tile played" : "tile"} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
             })}
           </div>
         </section>

@@ -7,6 +7,7 @@ const upgradeCapId = "0xe6759658c4f3e412ee0d88142671eff44c3149a8c188364b1ab0e9ff
 const packageId = "0x047f8192cfa30e82a75546a064e8c56ae5d3364d70faa350de4c44b28cfd9d99";
 const typeOriginPackageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
 const ledgerId = "0xa02b0a9574fc9255d5ef6c86cd9968df6e7a7913944d343ffcca1c586a22ef9c";
+const autoplayRegistryId = process.env.SUI_AUTOPLAY_REGISTRY_ID ?? process.env.NEXT_PUBLIC_SUI_AUTOPLAY_REGISTRY_ID ?? "";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
@@ -20,6 +21,8 @@ type GameJson = {
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
 type RefineryJson = { positions: Position[]; awarded: string; minted: string; forfeited: string };
 type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };
+type AutoplayPlanJson = { plan_id: string; owner: string; tiles: number[]; amount_per_tile: string; rounds_remaining: string; last_round_played: string; funds: string; active: boolean };
+type AutoplayRegistryJson = { plans: AutoplayPlanJson[]; next_plan_id: string };
 type RoundSettledJson = { round?: string | number; winning_tile?: string | number; gross?: string; winner_pool?: string };
 
 const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
@@ -28,16 +31,18 @@ const mtbx = (units: bigint) => Number(units) / 1_000_000;
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, settledEvents] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
       client.core.getObject({ objectId: ledgerId, include: { json: true } }),
+      autoplayRegistryId ? client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } }) : Promise.resolve({ object: null }),
       eventClient.core.listEvents({ filter: { eventType: `${typeOriginPackageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
     const ledger = ledgerObject.json as LedgerJson;
+    const registry = registryResult.object?.json as AutoplayRegistryJson | undefined;
     const now = Date.now();
     const round = BigInt(game.round);
     const winner = game.winning_tile;
@@ -56,6 +61,13 @@ export async function GET(request: Request) {
     const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const ledgerCredit = address ? ledger.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
+    const autoplayPlans = address ? (registry?.plans ?? []).filter((plan) =>
+      plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
+    ).map((plan) => ({
+      planId: Number(plan.plan_id), roundsRemaining: Number(plan.rounds_remaining),
+      tileCount: plan.tiles.length, amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
+      fundedSui: sui(BigInt(plan.funds)), lastRoundPlayed: Number(plan.last_round_played),
+    })) : [];
     const lastEvent = settledEvents.events[0];
     const lastJson = (lastEvent?.json ?? null) as RoundSettledJson | null;
     const lastRound = lastJson ? {
@@ -78,6 +90,7 @@ export async function GET(request: Request) {
       refinedMtbx: mtbx(refined), unrefinedMtbx: mtbx(unrefined), refinedPositions: refinedPositions.length,
       unrefinedPositions: unrefinedPositions.length,
       ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),
+      autoplayPlans,
       lastRound,
       nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map((position) => Number(position.matures_at_ms))) : null,
     }, { headers: { "cache-control": "no-store" } });

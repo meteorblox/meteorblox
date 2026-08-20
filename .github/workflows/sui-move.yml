@@ -36,6 +36,18 @@ jobs:
       - name: Build Move package
         run: "${SUIUP_DEFAULT_BIN_DIR}/sui move build"
 
+      - name: Generate upgrade payload
+        run: |
+          "${SUIUP_DEFAULT_BIN_DIR}/sui" move build --dump-bytecode-as-base64 --no-tree-shaking --silence-warnings > /tmp/upgrade-output.txt
+          grep '^{"modules"' /tmp/upgrade-output.txt > /tmp/upgrade-data.json
+          test -s /tmp/upgrade-data.json
+
+      - name: Upload upgrade payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatible-upgrade-data
+          path: /tmp/upgrade-data.json
+
       - name: Run Move unit tests
         run: "${SUIUP_DEFAULT_BIN_DIR}/sui move test"
 

@@ -500,6 +500,7 @@ export default function Home() {
           <div className="grid" aria-label="Mining grid">
             {tiles.map((tile) => {
               const isSelected = selected.includes(tile);
+              const isPlayed = chainState?.playedTiles.includes(tile) ?? false;
               const previewAmount = tileAmounts[tile - 1] + (isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0);
               return <button key={tile} className={isSelected ? "tile selected" : isPlayed ? "tile played" : "tile"} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
             })}

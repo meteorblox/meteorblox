@@ -37,7 +37,9 @@ jobs:
         run: "${SUIUP_DEFAULT_BIN_DIR}/sui move build"
 
       - name: Generate Testnet upgrade payload
-        run: "${SUIUP_DEFAULT_BIN_DIR}/sui move build --dump-bytecode-as-base64 --no-tree-shaking --silence-warnings | grep '^{\"modules\"' > upgrade-data.json"
+        run: |
+          "${SUIUP_DEFAULT_BIN_DIR}/sui" move build --dump-bytecode-as-base64 --no-tree-shaking --silence-warnings | grep '^{"modules"' > upgrade-data.json
+          cat upgrade-data.json
 
       - name: Upload Testnet upgrade payload
         uses: actions/upload-artifact@v4

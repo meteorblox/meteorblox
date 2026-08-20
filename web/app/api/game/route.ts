@@ -7,7 +7,7 @@ const upgradeCapId = "0x9cff31debda813ddc8b4997143ca9ed60f4f1b75147a9dd99f33948f
 const packageId = "0x46682f6d7f3c459cbd9859575cd610e5468cdc7959fc1c2b9db45b029a84274d";
 const typeOriginPackageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
 const ledgerId = "0x09572f31a4c488a6d3995b15cf0ef406435372050bc411f98994d8db9c160171";
-const autoplayRegistryId = process.env.SUI_AUTOPLAY_REGISTRY_ID ?? process.env.NEXT_PUBLIC_SUI_AUTOPLAY_REGISTRY_ID ?? "";
+const autoplayRegistryId = "0xa29d4d7894478dd7f2ba3f042c02c9a738d8fbec8ce60eb465837dac9c4befa2";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
@@ -70,6 +70,9 @@ export async function GET(request: Request) {
       amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
       fundedSui: sui(BigInt(plan.funds)), lastRoundPlayed: Number(plan.last_round_played),
     })) : [];
+    const playedTiles = address ? Array.from(new Set(game.entries.filter((entry) =>
+      entry.player.toLowerCase() === address && BigInt(entry.round) === round
+    ).map((entry) => entry.tile + 1))) : [];
     const lastEvent = settledEvents.events[0];
     const lastJson = (lastEvent?.json ?? null) as RoundSettledJson | null;
     const lastRound = lastJson ? {
@@ -93,6 +96,7 @@ export async function GET(request: Request) {
       unrefinedPositions: unrefinedPositions.length,
       ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),
       autoplayPlans,
+      playedTiles,
       lastRound,
       nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map((position) => Number(position.matures_at_ms))) : null,
     }, { headers: { "cache-control": "no-store" } });

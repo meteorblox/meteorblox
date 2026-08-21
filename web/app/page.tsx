@@ -513,8 +513,10 @@ export default function Home() {
               const isSelected = selected.includes(tile);
               const isPlayed = chainState?.playedTiles.includes(tile) ?? false;
               const isWinning = winningFlashTile === tile;
-              const previewAmount = tileAmounts[tile - 1] + (isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0);
-              return <button key={tile} className={`tile${isSelected ? " selected" : ""}${isPlayed ? " played" : ""}${isWinning ? " winning" : ""}`} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : ""}${isWinning ? ", winning block" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
+              const isLastWinner = chainState?.lastRound?.winningTile === tile;
+              const selectedAmount = isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0;
+              const previewAmount = tileAmounts[tile - 1] + selectedAmount;
+              return <button key={tile} className={`tile${isSelected ? " selected" : ""}${isPlayed ? " played" : ""}${isLastWinner ? " last-winner" : ""}${isWinning ? " winning" : ""}`} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isSelected ? `, selected for ${selectedAmount.toFixed(3)} SUI` : ""}${isPlayed ? ", played this round" : ""}${isLastWinner ? ", last winning block" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}{isSelected && <span className="tile-selected-amount" aria-hidden="true">+{selectedAmount.toFixed(3)} SUI</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
             })}
           </div>
         </section>

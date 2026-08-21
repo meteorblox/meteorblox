@@ -52,7 +52,8 @@ export default function Home() {
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
-  const [winningFlashTile, setWinningFlashTile] = useState<number | null>(null);\n  const [simulatedTiles, setSimulatedTiles] = useState<number[]>([]);
+  const [winningFlashTile, setWinningFlashTile] = useState<number | null>(null);
+  const [simulatedTiles, setSimulatedTiles] = useState<number[]>([]);
   const lastFlashedRound = useRef<number | null>(null);
   const [chainLoading, setChainLoading] = useState(true);
   const refreshInFlight = useRef(false);
@@ -135,7 +136,31 @@ export default function Home() {
     setWinningFlashTile(result.winningTile);
     const timer = window.setTimeout(() => setWinningFlashTile(null), 10_000);
     return () => window.clearTimeout(timer);
-  }, [chainState?.lastRound?.round, chainState?.lastRound?.winningTile]);\n\n  const idleSimulation = Boolean(\n    chainState &&\n    !chainState.settled &&\n    chainState.playedTiles.length === 0 &&\n    chainState.tileTotals.every((value) => value === 0)\n  );\n\n  useEffect(() => {\n    if (!idleSimulation) {\n      setSimulatedTiles([]);\n      return;\n    }\n\n    const animateIdleGrid = () => {\n      const shuffled = [...tiles].sort(() => Math.random() - 0.5);\n      const count = 3 + Math.floor(Math.random() * 4);\n      setSimulatedTiles(shuffled.slice(0, count));\n    };\n\n    animateIdleGrid();\n    const timer = window.setInterval(animateIdleGrid, 2_400);\n    return () => window.clearInterval(timer);\n  }, [idleSimulation, chainState?.round]);
+  }, [chainState?.lastRound?.round, chainState?.lastRound?.winningTile]);
+
+  const idleSimulation = Boolean(
+    chainState &&
+    !chainState.settled &&
+    chainState.playedTiles.length === 0 &&
+    chainState.tileTotals.every((value) => value === 0)
+  );
+
+  useEffect(() => {
+    if (!idleSimulation) {
+      setSimulatedTiles([]);
+      return;
+    }
+
+    const animateIdleGrid = () => {
+      const shuffled = [...tiles].sort(() => Math.random() - 0.5);
+      const count = 3 + Math.floor(Math.random() * 4);
+      setSimulatedTiles(shuffled.slice(0, count));
+    };
+
+    animateIdleGrid();
+    const timer = window.setInterval(animateIdleGrid, 2_400);
+    return () => window.clearInterval(timer);
+  }, [idleSimulation, chainState?.round]);
 
   const total = useMemo(() => {
     const value = Number(amount);
@@ -513,7 +538,8 @@ export default function Home() {
               const isSelected = selected.includes(tile);
               const isPlayed = chainState?.playedTiles.includes(tile) ?? false;
               const isWinning = winningFlashTile === tile;
-              const isLastWinner = chainState?.lastRound?.winningTile === tile;\n              const isSimulated = idleSimulation && simulatedTiles.includes(tile);
+              const isLastWinner = chainState?.lastRound?.winningTile === tile;
+              const isSimulated = idleSimulation && simulatedTiles.includes(tile);
               const selectedAmount = isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0;
               const previewAmount = tileAmounts[tile - 1] + selectedAmount;
               return <button key={tile} className={`tile${isSelected ? " selected" : ""}${isPlayed ? " played" : ""}${!isSelected && !isPlayed && isSimulated ? " simulated" : ""}${isLastWinner ? " last-winner" : ""}${isWinning ? " winning" : ""}`} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isSelected ? `, selected for ${selectedAmount.toFixed(3)} SUI` : ""}${isPlayed ? ", played this round" : ""}${isSimulated ? ", simulated idle activity" : ""}${isLastWinner ? ", last winning block" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}{!isSelected && !isPlayed && isSimulated && <span className="tile-simulated-badge" aria-hidden="true">SIM</span>}{isSelected && <span className="tile-selected-amount" aria-hidden="true">+{selectedAmount.toFixed(3)} SUI</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;

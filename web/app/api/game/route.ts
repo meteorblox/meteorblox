@@ -5,7 +5,6 @@ const gameId = "0xd9fcf2c789432d7ad59ff04918880d96842f4a42cd3032616829ca383816ac
 const refineryId = "0xb59cb6847c8e7582bce7d762aff44012aa9babe38cb0be7634aecc644e732d4c";
 const upgradeCapId = "0x9cff31debda813ddc8b4997143ca9ed60f4f1b75147a9dd99f33948fc28acc2d";
 const packageId = "0x46682f6d7f3c459cbd9859575cd610e5468cdc7959fc1c2b9db45b029a84274d";
-const typeOriginPackageId = "0x9f1fa8dffd2f10481f4b91bd288e52a5a90d6cfca2e7ed542624671ed7202a09";
 const ledgerId = "0x09572f31a4c488a6d3995b15cf0ef406435372050bc411f98994d8db9c160171";
 const autoplayRegistryId = "0xa29d4d7894478dd7f2ba3f042c02c9a738d8fbec8ce60eb465837dac9c4befa2";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
@@ -38,7 +37,7 @@ export async function GET(request: Request) {
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
       client.core.getObject({ objectId: ledgerId, include: { json: true } }),
       autoplayRegistryId ? client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } }) : Promise.resolve({ object: null }),
-      eventClient.core.listEvents({ filter: { eventType: `${typeOriginPackageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
+      eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;

@@ -52,6 +52,8 @@ export default function Home() {
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
+  const [winningFlashTile, setWinningFlashTile] = useState<number | null>(null);
+  const lastFlashedRound = useRef<number | null>(null);
   const [chainLoading, setChainLoading] = useState(true);
   const refreshInFlight = useRef(false);
   const latestRound = useRef(-1);
@@ -125,6 +127,15 @@ export default function Home() {
     const timer = window.setInterval(() => void refreshChainState(), 2_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, [refreshChainState]);
+
+  useEffect(() => {
+    const result = chainState?.lastRound;
+    if (!result || lastFlashedRound.current === result.round) return;
+    lastFlashedRound.current = result.round;
+    setWinningFlashTile(result.winningTile);
+    const timer = window.setTimeout(() => setWinningFlashTile(null), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [chainState?.lastRound?.round, chainState?.lastRound?.winningTile]);
 
   const total = useMemo(() => {
     const value = Number(amount);
@@ -501,8 +512,9 @@ export default function Home() {
             {tiles.map((tile) => {
               const isSelected = selected.includes(tile);
               const isPlayed = chainState?.playedTiles.includes(tile) ?? false;
+              const isWinning = winningFlashTile === tile;
               const previewAmount = tileAmounts[tile - 1] + (isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0);
-              return <button key={tile} className={isSelected ? "tile selected" : isPlayed ? "tile played" : "tile"} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
+              return <button key={tile} className={`tile${isSelected ? " selected" : ""}${isPlayed ? " played" : ""}${isWinning ? " winning" : ""}`} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : ""}${isWinning ? ", winning block" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
             })}
           </div>
         </section>

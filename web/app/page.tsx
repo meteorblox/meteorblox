@@ -21,6 +21,8 @@ const rewardCapId = "0x4eb2ec5b6779f3c2d5c7321350ad32871d61709a9696c126de453c13d
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
+const stakingVaultId = "0xed814a5a13886244d1dc2a6e136d971cd5f52e27b33d01916c16590fcbbe5adc";
+const dslvrCoinType = `${packageId}::dslvr::DSLVR`;
 const suiClockId = "0x6";
 const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
@@ -71,6 +73,8 @@ export default function Home() {
   const [publishingPackage, setPublishingPackage] = useState(false);
   const [creatingAutoplayRegistry, setCreatingAutoplayRegistry] = useState(false);
   const [creatingStakingVault, setCreatingStakingVault] = useState(false);
+  const [submittingStake, setSubmittingStake] = useState(false);
+  const [stakingState, setStakingState] = useState({ availableDslvr: 0, userStakedDslvr: 0, totalStakedDslvr: 0, rewardBalanceDslvr: 0, positionCount: 0 });
   const currentAccount = useCurrentAccount();
   const currentWallet = useCurrentWallet();
   const currentAddress = currentAccount?.address;
@@ -134,6 +138,22 @@ export default function Home() {
     const timer = window.setInterval(() => void refreshChainState(), 2_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, [refreshChainState]);
+
+  const refreshStakingState = useCallback(async () => {
+    const query = currentAddress ? `?address=${encodeURIComponent(currentAddress)}` : "";
+    try {
+      const response = await fetch(`/api/staking${query}`, { cache: "no-store" });
+      const data = await response.json();
+      if (response.ok) setStakingState(data);
+    } catch { /* Keep the last confirmed staking snapshot. */ }
+  }, [currentAddress]);
+
+  useEffect(() => {
+    if (view !== "stake") return;
+    void refreshStakingState();
+    const timer = window.setInterval(() => void refreshStakingState(), 4_000);
+    return () => window.clearInterval(timer);
+  }, [view, refreshStakingState]);
 
   useEffect(() => {
     const result = chainState?.lastRound;
@@ -419,6 +439,40 @@ export default function Home() {
     } finally { setCreatingStakingVault(false); }
   }
 
+  function dslvrToUnits(value: string) {
+    const normalized = value.trim();
+    if (!/^\d+(\.\d{0,6})?$/.test(normalized)) return null;
+    const [whole, fraction = ""] = normalized.split(".");
+    return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
+  }
+
+  async function submitStakeAction() {
+    if (!currentAccount) return setConnectOpen(true);
+    const units = dslvrToUnits(stakeAmount);
+    if (!units || units <= 0n) return setNotice("Enter a valid DSLVR amount with no more than 6 decimals.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(30_000_000);
+    if (stakeMode === "stake") {
+      const payment = transaction.coin({ type: dslvrCoinType, balance: units });
+      transaction.moveCall({ target: `${packageId}::staking::stake`, arguments: [transaction.object(stakingVaultId), payment] });
+    } else {
+      transaction.moveCall({ target: `${packageId}::staking::unstake`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units)] });
+    }
+    setSubmittingStake(true);
+    setNotice(`Waiting for wallet approval to ${stakeMode} DSLVR...`);
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) {
+        setNotice(`${stakeMode === "stake" ? "DSLVR staked" : "DSLVR unstaked"}. Transaction: ${result.digest}`);
+        setStakeAmount("");
+        window.setTimeout(() => void refreshStakingState(), 1_500);
+      }
+    } catch (error) {
+      setNotice(`${stakeMode === "stake" ? "Stake" : "Unstake"} failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setSubmittingStake(false); }
+  }
+
   async function claimLedgerSui() {
     if (!currentAccount) return setConnectOpen(true);
     if (!(chainState?.ledgerSui ?? 0)) return setNotice("No settled SUI rewards are available to claim.");
@@ -616,26 +670,26 @@ export default function Home() {
       </section> : <section className="stake-page">
         <div className="stake-hero"><p className="eyebrow">TESTNET BETA</p><h1>Stake DSLVR</h1><p>Stake freely. Earn DSLVR rewards.</p></div>
         <div className="stake-simple">
-          <div className="stake-summary"><span><small>YOUR STAKE</small><strong>0.000000 DSLVR</strong></span><span><small>CLAIMABLE</small><strong>0.000000 DSLVR</strong></span></div>
+          <div className="stake-summary"><span><small>YOUR STAKE</small><strong>{stakingState.userStakedDslvr.toFixed(6)} DSLVR</strong></span><span><small>VAULT REWARDS</small><strong>{stakingState.rewardBalanceDslvr.toFixed(6)} DSLVR</strong></span></div>
           <article className="stake-card">
             <div className="stake-tabs"><button className={stakeMode === "stake" ? "active" : ""} onClick={() => setStakeMode("stake")}>Stake</button><button className={stakeMode === "unstake" ? "active" : ""} onClick={() => setStakeMode("unstake")}>Unstake</button></div>
-            <div className="stake-balance"><span>{stakeMode === "stake" ? "AVAILABLE" : "STAKED"}</span><strong>0.000000 DSLVR</strong></div>
-            <label htmlFor="stake-amount">Amount</label><div className="stake-input"><input id="stake-amount" inputMode="decimal" placeholder="0.00" value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value.replace(/[^0-9.]/g, ""))} /><span>DSLVR</span><button type="button" onClick={() => setStakeAmount("0")}>MAX</button></div>
+            <div className="stake-balance"><span>{stakeMode === "stake" ? "AVAILABLE" : "STAKED"}</span><strong>{(stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6)} DSLVR</strong></div>
+            <label htmlFor="stake-amount">Amount</label><div className="stake-input"><input id="stake-amount" inputMode="decimal" placeholder="0.00" value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value.replace(/[^0-9.]/g, ""))} /><span>DSLVR</span><button type="button" onClick={() => setStakeAmount((stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6))}>MAX</button></div>
             <div className="stake-note"><span>No lockup</span><span>Withdraw anytime</span></div>
-            <button className="deploy stake-submit" disabled>{stakeMode === "stake" ? "Staking vault deployment pending" : "No DSLVR currently staked"}</button>
+            <button className="deploy stake-submit" disabled={submittingStake || !stakeAmount || (stakeMode === "unstake" && stakingState.userStakedDslvr <= 0)} onClick={submitStakeAction}>{submittingStake ? "Waiting for wallet approval..." : stakeMode === "stake" ? "Stake DSLVR" : "Unstake DSLVR"}</button>
           </article>
           <button className="claim-yield" disabled>Claim rewards</button>
           <section className="stake-market-summary" aria-label="Staking summary">
             <h2>Summary</h2>
             <dl>
               <div><dt>APR</dt><dd>&mdash;</dd></div>
-              <div><dt>Total deposits</dt><dd className="stake-dslvr-value"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />0.000000 DSLVR</dd></div>
+              <div><dt>Total deposits</dt><dd className="stake-dslvr-value"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{stakingState.totalStakedDslvr.toFixed(6)} DSLVR</dd></div>
               <div><dt>TVL</dt><dd>$0.00</dd></div>
             </dl>
-            <p>Live Testnet totals will populate after the staking vault is created. APR appears only after real reward activity exists.</p>
+            <p>{stakingState.positionCount} active staking position{stakingState.positionCount === 1 ? "" : "s"}. APR appears after real reward activity exists.</p>
           </section>
         </div>
-        <p className="stake-warning">Testnet preview. Staking remains inactive until the audited DSLVR vault is deployed.</p>
+        <p className="stake-warning">Sui Testnet beta. No lockup; withdrawals are available at any time.</p>
         <button className="back-link" onClick={() => setView("mine")}>Back to mining grid</button>
       </section>}
       <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>

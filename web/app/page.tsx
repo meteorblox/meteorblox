@@ -628,7 +628,7 @@ export default function Home() {
             <h2>Summary</h2>
             <dl>
               <div><dt>APR</dt><dd>&mdash;</dd></div>
-              <div><dt>Total deposits</dt><dd>0.000000 DSLVR</dd></div>
+              <div><dt>Total deposits</dt><dd className="stake-dslvr-value"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />0.000000 DSLVR</dd></div>
               <div><dt>TVL</dt><dd>$0.00</dd></div>
             </dl>
             <p>Live Testnet totals will populate after the staking vault is created. APR appears only after real reward activity exists.</p>

@@ -267,6 +267,10 @@ export default function Home() {
         target: `${packageId}::autoplay::create_plan`,
         arguments: [transaction.object(autoplayRegistryId), transaction.pure.vector("u8", selected.map((tile) => tile - 1)), transaction.pure.u64(mistPerTile), transaction.pure.u64(rounds), payment],
       });
+      transaction.moveCall({
+        target: `${packageId}::autoplay::execute_round`,
+        arguments: [transaction.object(autoplayRegistryId), transaction.object(gameId), transaction.object(suiClockId)],
+      });
     } else {
       const game = transaction.object(gameId);
       const clock = transaction.object(suiClockId);
@@ -469,6 +473,9 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
     transaction.moveCall({ target: `${packageId}::game::open_next_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
+    if (autoplayRegistryId) {
+      transaction.moveCall({ target: `${packageId}::autoplay::execute_round`, arguments: [transaction.object(autoplayRegistryId), transaction.object(gameId), transaction.object(suiClockId)] });
+    }
     setRoundAction(true); setNotice("Waiting for owner approval to open the next round...");
     try {
       const result = await executeWithSlush(transaction);

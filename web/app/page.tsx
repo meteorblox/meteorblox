@@ -408,7 +408,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${stakingPackageId}::staking::create_vault` });
+    transaction.moveCall({ target: `${packageId}::staking::create_vault` });
     setCreatingStakingVault(true);
     setNotice("Waiting for owner approval to create the shared DSLVR staking vault...");
     try {

@@ -75,7 +75,6 @@ export default function Home() {
   const wallets = useWallets();
   const connecting = walletConnection.isConnecting;
   const slushWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("slush"));
-  const phantomWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("phantom"));
   const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("phantom"));
 
   async function connectWallet(wallet: (typeof wallets)[number]) {
@@ -592,7 +591,6 @@ export default function Home() {
         <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Use Google through Slush for a simple Sui wallet experience, or connect another Sui wallet.</p>
         <button className="google-connect" disabled={!slushWallet || connecting} onClick={() => slushWallet && connectWallet(slushWallet)}><span className="google-mark">G</span><b>{connecting ? "Connectingâ€¦" : "Continue with Google via Slush"}</b></button>
         <div className="connect-divider"><span>or</span></div>
-        {phantomWallet ? <button className="sui-connect wallet-choice phantom-choice" onClick={() => connectWallet(phantomWallet)}>{phantomWallet.icon ? <img className="wallet-choice-icon" src={phantomWallet.icon} alt="" /> : <span className="phantom-mark">P</span>}<b>Connect Phantom</b></button> : <a className="sui-connect wallet-install phantom-choice" href="https://phantom.com/download" target="_blank" rel="noreferrer"><span className="phantom-mark">P</span><b>Install Phantom</b></a>}
         {standardWallets.map((wallet) => <button className="sui-connect wallet-choice" key={wallet.name} onClick={() => connectWallet(wallet)}>{wallet.icon ? <img className="wallet-choice-icon" src={wallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect {wallet.name}</b></button>)}
         <div className="onboarding-note"><strong>SUI TESTNET</strong><span>Slush provides Google zkLogin and a self-custodial Sui address with no Enoki subscription. Mining remains simulated until the Move contracts are deployed.</span></div>
       </section></div>}

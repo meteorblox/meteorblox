@@ -143,6 +143,8 @@ export default function Home() {
   const idleSimulation = Boolean(
     chainState &&
     !chainState.settled &&
+    chainState.potSui === 0 &&
+    chainState.autoplayPlans.length === 0 &&
     chainState.playedTiles.length === 0 &&
     chainState.tileTotals.every((value) => value === 0)
   );

@@ -532,7 +532,7 @@ export default function Home() {
           <div><small>DEPLOYED</small><strong>{chainState.lastRound.deployedSui.toFixed(4)} SUI</strong></div>
           <div><small>SUI REWARD POOL</small><strong>{chainState.lastRound.rewardPoolSui.toFixed(4)} SUI</strong></div>
           <div><small>DSLVR AWARDED</small><strong>{chainState.lastRound.mtbxAwarded.toFixed(2)} DSLVR</strong></div>
-          {chainState.lastRound.transaction && <a href={`https://testnet.suivision.xyz/txblock/${chainState.lastRound.transaction}`} target="_blank" rel="noreferrer">View settlement â†—</a>}
+          {chainState.lastRound.transaction && <a href={`https://testnet.suivision.xyz/txblock/${chainState.lastRound.transaction}`} target="_blank" rel="noreferrer">View settlement</a>}
         </> : <p>The first completed round will appear here automatically.</p>}</div>}
       </section>
 

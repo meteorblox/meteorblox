@@ -2,15 +2,15 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 
-const packageId = "0x46682f6d7f3c459cbd9859575cd610e5468cdc7959fc1c2b9db45b029a84274d";
-const gameId = "0xd9fcf2c789432d7ad59ff04918880d96842f4a42cd3032616829ca383816ac6f";
-const refineryId = "0xb59cb6847c8e7582bce7d762aff44012aa9babe38cb0be7634aecc644e732d4c";
-const ledgerId = "0x09572f31a4c488a6d3995b15cf0ef406435372050bc411f98994d8db9c160171";
+const packageId = "0xbd82e0552e768059b7768e78963c59c9020003b1cf6c9c078744e6b617628f6e";
+const gameId = "0x07385f18763978170f254199cdc3468b05935037916549ac60984c68e7ba31b5";
+const refineryId = "0xb0804c01a08e5e1fc86c831b7ed5cd18fd9189e4d8d45ca7e3617acda1560ec2";
+const ledgerId = "0x7f795f4533202fbcd83a5c20a505f18126e9740a8e804e1496eb56f872a6cb8f";
 const randomId = "0x8";
 const clockId = "0x6";
 const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
-const autoplayRegistryId = "0xa29d4d7894478dd7f2ba3f042c02c9a738d8fbec8ce60eb465837dac9c4befa2";
+const autoplayRegistryId = "0x12686fca999b0457f572ca716c2eb7276510a13f26772b8222aa8cdf88f154cf";
 let lastAutoplayRound = -1n;
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");

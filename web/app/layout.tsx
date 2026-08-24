@@ -16,14 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "METEORBLOX",
-  description: "Mine the grid. Strike the rare. A METEORBLOX game prototype on Sui.",
-  other: {
-    "codex-preview": "development",
-  },
+  title: "SLVRBLOX",
+  description: "Pick your zone. Strike the grid. Earn DSLVR on Sui.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/brand/dslvr-coin.png",
+    shortcut: "/brand/dslvr-coin.png",
+    apple: "/brand/dslvr-coin.png",
   },
 };
 
@@ -42,4 +40,3 @@ export default function RootLayout({
     </html>
   );
 }
-

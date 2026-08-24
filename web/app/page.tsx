@@ -525,7 +525,7 @@ export default function Home() {
       <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
         <button className="last-round-toggle" type="button" aria-expanded={lastRoundOpen} onClick={() => setLastRoundOpen((open) => !open)}>
           <span><small>LAST ROUND</small><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")}` : "Waiting for settlement"}</strong></span>
-          {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "âˆ’" : "+"}</i></span>}
+          {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "x" : "+"}</i></span>}
         </button>
         {lastRoundOpen && <div className="last-round-details">{chainState?.lastRound ? <>
           <div><small>WINNING BLOCK</small><strong>{chainState.lastRound.winningTile}</strong></div>

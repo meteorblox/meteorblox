@@ -3,9 +3,9 @@ import { SuiGraphQLClient } from "@mysten/sui/graphql";
 
 const gameId = "0x07385f18763978170f254199cdc3468b05935037916549ac60984c68e7ba31b5";
 const refineryId = "0xb0804c01a08e5e1fc86c831b7ed5cd18fd9189e4d8d45ca7e3617acda1560ec2";
-const upgradeCapId = "0x9cff31debda813ddc8b4997143ca9ed60f4f1b75147a9dd99f33948fc28acc2d";
+const upgradeCapId = "0xf9e2905b15ddecdebeac8d6195169660d5998d0a76f2e4af7fda8adc70a2c83a";
 const packageId = "0xbd82e0552e768059b7768e78963c59c9020003b1cf6c9c078744e6b617628f6e";
-const ledgerId = "0x7f795f4533202fbcd83a5c20a505f18126e9740a8e804e1496eb56f872a6cb8f";
+const ledgerId = process.env.NEXT_PUBLIC_SUI_LEDGER_ID ?? "";
 const autoplayRegistryId = "0x12686fca999b0457f572ca716c2eb7276510a13f26772b8222aa8cdf88f154cf";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
@@ -35,13 +35,13 @@ export async function GET(request: Request) {
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
-      client.core.getObject({ objectId: ledgerId, include: { json: true } }),
+      ledgerId ? client.core.getObject({ objectId: ledgerId, include: { json: true } }) : Promise.resolve({ object: null }),
       autoplayRegistryId ? client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } }) : Promise.resolve({ object: null }),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
-    const ledger = ledgerObject.json as LedgerJson;
+    const ledger = ledgerObject?.json as LedgerJson | undefined;
     const registry = registryResult.object?.json as AutoplayRegistryJson | undefined;
     const now = Date.now();
     const round = BigInt(game.round);
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
     const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-    const ledgerCredit = address ? ledger.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
+    const ledgerCredit = address ? ledger?.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
     const autoplayPlans = address ? (registry?.plans ?? []).filter((plan) =>
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({

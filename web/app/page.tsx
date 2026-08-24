@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentAccount, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 import { upgradeData } from "./upgrade-data";
+import { dslvrPublishData } from "./dslvr-publish-data";
 
 // The current Testnet upgrade includes the automatic empty-round rollover fix.
 
@@ -138,26 +139,29 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [chainState?.lastRound?.round, chainState?.lastRound?.winningTile]);
 
-  const idleSimulation = Boolean(chainState && !chainState.settled && chainState.playedTiles.length === 0);
+  const idleSimulation = Boolean(
+    chainState &&
+    !chainState.settled &&
+    chainState.playedTiles.length === 0 &&
+    chainState.tileTotals.every((value) => value === 0)
+  );
 
   useEffect(() => {
     if (!idleSimulation) {
       setSimulatedTiles([]);
       return;
     }
-    const updateSimulation = () => {
-      const shuffled = [...tiles];
-      for (let index = shuffled.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(Math.random() * (index + 1));
-        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex]!, shuffled[index]!];
-      }
+
+    const animateIdleGrid = () => {
+      const shuffled = [...tiles].sort(() => Math.random() - 0.5);
       const count = 3 + Math.floor(Math.random() * 4);
       setSimulatedTiles(shuffled.slice(0, count));
     };
-    updateSimulation();
-    const timer = window.setInterval(updateSimulation, 2_400);
+
+    animateIdleGrid();
+    const timer = window.setInterval(animateIdleGrid, 2_400);
     return () => window.clearInterval(timer);
-  }, [idleSimulation]);
+  }, [idleSimulation, chainState?.round]);
 
   const total = useMemo(() => {
     const value = Number(amount);
@@ -291,7 +295,7 @@ export default function Home() {
 
   async function activateTestnetGame() {
     if (!currentAccount) return setConnectOpen(true);
-    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
@@ -406,20 +410,20 @@ export default function Home() {
 
   async function publishCleanTestnetPackage() {
     if (!currentAccount) return setConnectOpen(true);
-    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(300_000_000);
     const upgradeCap = transaction.publish({
-      modules: [...upgradeData.modules],
-      dependencies: [...upgradeData.dependencies],
+      modules: [...dslvrPublishData.modules],
+      dependencies: [...dslvrPublishData.dependencies],
     });
     transaction.transferObjects([upgradeCap], currentAccount.address);
     setPublishingPackage(true);
-    setNotice("Waiting for owner approval to publish a clean METEORBLOX Testnet deployment...");
+    setNotice("Waiting for owner approval to publish a clean SLVRBLOX / DSLVR Testnet deployment...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) setNotice(`Clean METEORBLOX Testnet deployment published. Transaction: ${result.digest}`);
+      if (result) setNotice(`Clean SLVRBLOX / DSLVR Testnet deployment published. Transaction: ${result.digest}`);
     } catch (error) {
       setNotice(`Clean Testnet publish failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setPublishingPackage(false); }
@@ -489,16 +493,16 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#" aria-label="MeteorBlox home" onClick={() => setView("mine")}><span className="brand-meteor" aria-hidden="true"><i /><b /><em /></span><span className="wordmark"><strong>METEOR</strong><b>BLOX</b></span></a>
+        <a className="brand slvr-brand" href="#" aria-label="SLVRBLOX home" onClick={() => setView("mine")}><img src="/brand/slvrblox-logo.png" alt="SLVRBLOX" /></a>
         <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button></nav>
         <div className="top-actions">
-          <div className="protocol-links" aria-label="MeteorBlox community links">
+          <div className="protocol-links" aria-label="SLVRBLOX community links">
             <button title="MeteorBlox on X — coming soon" aria-label="MeteorBlox on X, coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.77 7.74L23.2 22h-6.24l-4.89-6.39L6.48 22H3.36l7.25-8.29L2.97 2h6.4l4.42 5.84L18.9 2Zm-1.1 17.84h1.73L8.43 4.05H6.58L17.8 19.84Z" /></svg></button>
             <button title="MeteorBlox on GitHub — coming soon" aria-label="MeteorBlox on GitHub, coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49l-.01-1.92c-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.64-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.35 9.35 0 0 1 12 6.93c.85 0 1.7.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.59.69.49A10.23 10.23 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" clipRule="evenodd" /></svg></button>
             <button title="MeteorBlox Discord — coming soon" aria-label="MeteorBlox Discord, coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.54 5.34A17.3 17.3 0 0 0 15.29 4l-.52 1.06a15.77 15.77 0 0 0-5.54 0L8.7 4A17.45 17.45 0 0 0 4.45 5.34C1.76 9.43 1.03 13.42 1.4 17.35a17.1 17.1 0 0 0 5.21 2.69l1.26-1.76a11.1 11.1 0 0 1-1.98-.97l.49-.38c3.82 1.8 7.96 1.8 11.73 0l.5.38c-.64.38-1.3.7-1.99.97l1.26 1.76a17.03 17.03 0 0 0 5.21-2.69c.43-4.56-.73-8.51-3.55-12.01ZM8.68 14.93c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.93 2.4-2.1 2.4Zm6.64 0c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.92 2.4-2.1 2.4Z" /></svg></button>
           </div>
           <div className="asset-tickers" aria-label="Token prices">
-            <span className="price-chip mtbx-chip" title="MTBX price"><i className="ticker-meteor" aria-hidden="true"><i /><b /><em /></i><strong>$0.00</strong></span>
+            <span className="price-chip mtbx-chip" title="DSLVR preview"><img className="ticker-slvr-core" src="/brand/slvr-core.png" alt="" aria-hidden="true" /><strong><small>DSLVR</small>$0.00</strong></span>
             <span className="price-chip sui-chip" title="SUI price"><i className="ticker-sui" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/><path d="M11 24.5c1.4 2.6 4.5 3.7 7.2 2.4 1.1-.5 2-1.4 2.6-2.4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg></i><strong>{suiPrice === null ? "Loading" : `$${suiPrice.toFixed(2)}`}</strong></span>
           </div>
           <span className="network"><i /> Sui Testnet</span><button className="wallet" onClick={openAccountDrawer}>{currentAccount ? `${currentAccount.address.slice(0, 6)}...${currentAccount.address.slice(-4)}` : "Sign in"}</button>
@@ -508,7 +512,7 @@ export default function Home() {
       <section className="round-strip" aria-label="Current round">
         <div><small>ROUND</small><strong>{chainLoading ? "—" : `#${String(chainState?.round ?? 0).padStart(6, "0")}`}</strong></div><div><small>TIME LEFT</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></div>
         <div><small>DEPLOYED</small><strong className="deployed-total"><i className="round-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{chainLoading ? "—" : (chainState?.potSui ?? 0).toFixed(4)}</strong></div>
-        <div><small>METEOR SHOWER</small><strong className="meteor-shower-total"><i className="round-meteor-icon" aria-hidden="true"><i /><b /></i>{mtbxRoundReward.toFixed(2)}</strong></div>
+        <div><small>SLVR CORE REWARD</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/slvr-core.png" alt="" aria-hidden="true" />{mtbxRoundReward.toFixed(2)}</strong></div>
       </section>
 
       <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
@@ -527,19 +531,20 @@ export default function Home() {
 
       {view === "mine" ? <div className="workspace">
         <section className="mine-panel">
-          <div className="section-heading"><div><p>LIVE GRID &middot; {idleSimulation ? "IDLE SIMULATION" : "TESTNET"}</p><h1>Choose your impact zone.</h1>{idleSimulation && <small className="simulation-note">Visual demo only · no SUI, rewards, or simulated players</small>}</div>
+          <div className="section-heading"><div><p>LIVE GRID &middot; {idleSimulation ? "IDLE SIMULATION" : "TESTNET"}</p><h1>Choose your impact zone.</h1>{idleSimulation && <span className="simulation-note">Visual demo only &middot; no SUI, rewards, or simulated players</span>}</div>
             <button className="text-button" onClick={toggleAllTiles}>{selected.length === 25 ? "Clear" : "Select all"}</button>
           </div>
           <div className="grid" aria-label="Mining grid">
             {tiles.map((tile) => {
               const isSelected = selected.includes(tile);
               const isPlayed = chainState?.playedTiles.includes(tile) ?? false;
-              const isSimulated = idleSimulation && simulatedTiles.includes(tile);
               const isWinning = winningFlashTile === tile;
               const isLastWinner = chainState?.lastRound?.winningTile === tile;
+              const isSimulated = idleSimulation && simulatedTiles.includes(tile);
               const selectedAmount = isSelected && Number.isFinite(Number(amount)) ? Number(amount) : 0;
               const previewAmount = tileAmounts[tile - 1] + selectedAmount;
-              return <button key={tile} className={`tile${isSelected ? " selected" : ""}${isPlayed ? " played" : ""}${!isSelected && !isPlayed && isSimulated ? " simulated" : ""}${isLastWinner ? " last-winner" : ""}${isWinning ? " winning" : ""}`} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isSelected ? `, selected for ${selectedAmount.toFixed(3)} SUI` : ""}${isPlayed ? ", played this round" : ""}${isSimulated ? ", idle visual simulation" : ""}${isLastWinner ? ", last winning block" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}{!isSelected && !isPlayed && isSimulated && <span className="tile-simulated-badge" aria-hidden="true">SIM</span>}{isSelected && <span className="tile-selected-amount" aria-hidden="true">+{selectedAmount.toFixed(3)} SUI</span>}<span className="meteor" aria-hidden="true"><i /><b /></span><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
+              const tileClasses = ["tile", isSelected ? "selected" : isPlayed ? "played" : isSimulated ? "simulated" : "", isWinning ? "winning" : !isWinning && isLastWinner ? "last-winner" : ""].filter(Boolean).join(" ");
+              return <button key={tile} className={tileClasses} aria-label={`Block ${tile}, ${previewAmount.toFixed(3)} SUI${isPlayed ? ", played this round" : isSimulated ? ", simulated idle activity" : ""}`} aria-pressed={isSelected} onClick={() => toggleTile(tile)}><span className="tile-number">{tile}</span>{isSelected && <span className="tile-check" aria-hidden="true">✓</span>}{!isSelected && isPlayed && <span className="tile-played-badge" aria-hidden="true">PLAYED</span>}{!isSelected && !isPlayed && isSimulated && <span className="tile-simulated-badge" aria-hidden="true">SIM</span>}<img className="slvr-core" src="/brand/slvr-core.png" alt="" aria-hidden="true" /><span className="tile-balance"><i className="sui-icon" aria-hidden="true"><span /></i><strong>{previewAmount.toFixed(3)}</strong></span></button>;
             })}
           </div>
         </section>
@@ -571,7 +576,7 @@ export default function Home() {
         {notice && <p className="notice rewards-notice" role="status">{notice}</p>}<p className="disclaimer rewards-disclaimer">Live Sui Testnet state. Test SUI has no monetary value. Contract logic is unaudited and must not be used on Mainnet yet.</p>
         <button className="back-link" onClick={() => { setView("mine"); setNotice(""); }}>← Back to mining grid</button>
       </section>}
-      <footer><p><strong>$MTBX</strong> &middot; Digital rare metal on Sui</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>
+      <footer><p><strong>SLVRBLOX / $DSLVR</strong> &middot; Rebrand preview &middot; Testnet contract still uses MTBX</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>
 
       {connectOpen && <div className="connect-backdrop" role="presentation" onMouseDown={() => setConnectOpen(false)}><section className="connect-card" role="dialog" aria-modal="true" aria-labelledby="connect-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="connect-close" aria-label="Close sign in" onClick={() => setConnectOpen(false)}>×</button><span className="connect-orbit" aria-hidden="true"><i /></span>

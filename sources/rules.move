@@ -1,6 +1,6 @@
-module meteorblox::rules;
+module slvrblox::rules;
 
-/// Number of selectable tiles in every MeteorBlox round.
+/// Number of selectable tiles in every SLVRBLOX round.
 const TILE_COUNT: u64 = 25;
 
 /// Basis-points denominator.
@@ -8,9 +8,9 @@ const BPS: u64 = 10_000;
 const PROTOCOL_FEE_BPS: u64 = 1_000;
 
 /// Allocation of the full wager, totaling the 10% protocol fee.
-const TREASURY_BPS: u64 = 700;
+/// Five percent of gross entries is reserved for future open-market DSLVR buybacks.
+const TREASURY_BPS: u64 = 500;
 const REWARDS_BPS: u64 = 200;
-const OPS_BPS: u64 = 100;
 
 const EEmptyTiles: u64 = 1;
 const ETooManyTiles: u64 = 2;
@@ -92,12 +92,12 @@ public fun rewards(a: &Allocation): u64 { a.rewards }
 public fun ops(a: &Allocation): u64 { a.ops }
 
 #[test]
-fun test_exact_90_7_2_1_split() {
+fun test_exact_90_5_2_3_split() {
     let a = allocate(10_000);
     assert!(a.winner_pool == 9_000, 100);
-    assert!(a.treasury == 700, 101);
+    assert!(a.treasury == 500, 101);
     assert!(a.rewards == 200, 102);
-    assert!(a.ops == 100, 103);
+    assert!(a.ops == 300, 103);
     assert!(a.winner_pool + a.treasury + a.rewards + a.ops == 10_000, 104);
 }
 
@@ -136,3 +136,4 @@ fun test_tile_25_rejected() {
 fun test_total_overflow_rejected() {
     total_entry(18_446_744_073_709_551_615, 25, 1);
 }
+

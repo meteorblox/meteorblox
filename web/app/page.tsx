@@ -29,7 +29,7 @@ type ChainState = {
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
-  ledgerSui: number;
+  ledgerSui: number; walletSui: number;
   playedTiles: number[];
   autoplayPlans: Array<{ planId: number; roundsRemaining: number; tiles: number[]; tileCount: number; amountPerTileSui: number; fundedSui: number; lastRoundPlayed: number }>;
   lastRound: { round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; mtbxAwarded: number; transaction: string | null } | null;
@@ -567,7 +567,7 @@ export default function Home() {
           <div className="round-presets"><button onClick={() => setRounds(1)}>1</button><button onClick={() => setRounds(10)}>10</button><button onClick={() => setRounds(25)}>25</button><button onClick={() => setRounds((value) => value + 100)}>+100</button></div>
           <dl className="summary"><div><dt>Selected tiles</dt><dd>{selected.length}</dd></div><div><dt>Rounds</dt><dd>{rounds}</dd></div><div><dt>Per round</dt><dd>{(Number(amount) * selected.length || 0).toFixed(4)} SUI</dd></div><div><dt>Total deployment</dt><dd>{total.toFixed(4)} SUI</dd></div><div><dt>Winning reward</dt><dd>{mtbxRoundReward.toFixed(2)} DSLVR + SUI</dd></div><div><dt>Autoplay blocks</dt><dd>{chainState?.autoplayPlans.flatMap((plan) => plan.tiles).join(", ") || "—"}</dd></div><div><dt>Autoplay amount</dt><dd>{chainState?.autoplayPlans.length ? chainState.autoplayPlans.map((plan) => `${plan.amountPerTileSui.toFixed(3)} SUI`).join(" · ") : "—"}</dd></div><div><dt>Autoplay left</dt><dd>{(chainState?.autoplayPlans ?? []).reduce((sum, plan) => sum + plan.roundsRemaining, 0)} rounds</dd></div><div><dt>Autoplay funded</dt><dd>{(chainState?.autoplayPlans ?? []).reduce((sum, plan) => sum + plan.fundedSui, 0).toFixed(4)} SUI</dd></div></dl>
           <button className="deploy" disabled={submittingPlay || !chainState || chainState.settled || seconds === 0} onClick={deploy}>{submittingPlay ? "Waiting for Slush…" : !chainState?.rewardsBound ? "Owner activation required" : chainState.settled ? "Round is settled" : seconds === 0 ? "Waiting for settlement" : "Deploy to live grid"}</button>{notice && <p className="notice" role="status">{notice}</p>}
-          <button className="rewards-link" onClick={() => setView("rewards")}><span><small>YOUR ON-CHAIN REWARDS</small><strong>{((chainState?.unrefinedMtbx ?? 0) + (chainState?.refinedMtbx ?? 0) + (chainState?.estimatedMtbxWinnings ?? 0)).toFixed(6)} DSLVR + {(chainState?.estimatedSuiWinnings ?? 0).toFixed(6)} SUI</strong></span><b>View &amp; claim &rarr;</b></button>
+          <button className="rewards-link" onClick={() => setView("rewards")}><span><small>YOUR ON-CHAIN REWARDS</small><strong><span><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{((chainState?.unrefinedMtbx ?? 0) + (chainState?.refinedMtbx ?? 0) + (chainState?.estimatedMtbxWinnings ?? 0)).toFixed(6)} DSLVR</span><span>{(chainState?.walletSui ?? 0).toFixed(6)} SUI in wallet</span></strong></span><b>View &amp; claim &rarr;</b></button>
           <p className="disclaimer">Sui Testnet only. A confirmed play uses test SUI and writes your selected tiles on-chain.</p>
         </aside>
       </div> : <section className="rewards-page">
@@ -585,7 +585,7 @@ export default function Home() {
         {notice && <p className="notice rewards-notice" role="status">{notice}</p>}<p className="disclaimer rewards-disclaimer">Live Sui Testnet state. Test SUI has no monetary value. Contract logic is unaudited and must not be used on Mainnet yet.</p>
         <button className="back-link" onClick={() => { setView("mine"); setNotice(""); }}>← Back to mining grid</button>
       </section>}
-      <footer><p><strong>SLVRBLOX / $DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>
+      <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>
 
       {connectOpen && <div className="connect-backdrop" role="presentation" onMouseDown={() => setConnectOpen(false)}><section className="connect-card" role="dialog" aria-modal="true" aria-labelledby="connect-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="connect-close" aria-label="Close sign in" onClick={() => setConnectOpen(false)}>×</button><span className="connect-orbit" aria-hidden="true"><i /></span>

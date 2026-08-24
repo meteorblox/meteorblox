@@ -69,6 +69,7 @@ export default function Home() {
   const [creatingLedger, setCreatingLedger] = useState(false);
   const [publishingPackage, setPublishingPackage] = useState(false);
   const [creatingAutoplayRegistry, setCreatingAutoplayRegistry] = useState(false);
+  const [creatingStakingVault, setCreatingStakingVault] = useState(false);
   const currentAccount = useCurrentAccount();
   const currentWallet = useCurrentWallet();
   const currentAddress = currentAccount?.address;
@@ -340,7 +341,7 @@ export default function Home() {
 
   async function upgradeTestnetPackage() {
     if (!currentAccount) return setConnectOpen(true);
-    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(150_000_000);
@@ -357,10 +358,10 @@ export default function Home() {
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
     setUpgradingPackage(true);
-    setNotice("Waiting for the owner wallet to approve the continuous-round Testnet upgrade...");
+    setNotice("Waiting for the owner wallet to approve the DSLVR staking Testnet upgrade...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) setNotice(`METEORBLOX Testnet upgraded. Transaction: ${result.digest}`);
+      if (result) setNotice(`SLVRBLOX Testnet staking upgrade completed. Transaction: ${result.digest}`);
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
@@ -398,6 +399,23 @@ export default function Home() {
     } catch (error) {
       setNotice(`Autoplay Registry creation failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setCreatingAutoplayRegistry(false); }
+  }
+
+  async function createStakingVault() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(50_000_000);
+    transaction.moveCall({ target: `${packageId}::staking::create_vault` });
+    setCreatingStakingVault(true);
+    setNotice("Waiting for owner approval to create the shared DSLVR staking vault...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`DSLVR Staking Vault created. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Staking Vault creation failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setCreatingStakingVault(false); }
   }
 
   async function claimLedgerSui() {
@@ -588,7 +606,7 @@ export default function Home() {
         </div>
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>Publish the randomized autoplay package</h2><p>The existing package cannot accept this incompatible contract change. Publish a fresh Testnet package, then reconnect its new objects and activate a new autoplay registry.</p><button className="deploy" disabled={publishingPackage} onClick={publishCleanTestnetPackage}>{publishingPackage ? "Waiting for wallet approval..." : "Publish fresh Testnet package"}</button><button className="deploy" disabled title="This contract change requires a fresh package">Upgrade unavailable for this release</button>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled={creatingLedger} onClick={createRewardsLedger}>{creatingLedger ? "Waiting for wallet approval..." : "Create fresh Rewards Ledger"}</button>}{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled={creatingAutoplayRegistry} onClick={createAutoplayRegistry}>{creatingAutoplayRegistry ? "Waiting for wallet approval..." : "Create fresh Autoplay Registry"}</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
+        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>Deploy DSLVR staking</h2><p>Upgrade the current package without replacing the live game or DSLVR token, then create its shared no-lock staking vault.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade package with staking"}</button>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled={creatingStakingVault} onClick={createStakingVault}>{creatingStakingVault ? "Waiting for wallet approval..." : "Create DSLVR Staking Vault"}</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
         <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined MTBX" : "Refined MTBX"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}...${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique DSLVR RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for wallet approvalâ€¦" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}
@@ -607,7 +625,8 @@ export default function Home() {
           </article>
           <button className="claim-yield" disabled>Claim rewards</button>
         </div>
-        <p className="stake-warning">Testnet preview. Staking remains inactive until the audited DSLVR vault is deployed.</p><button className="back-link" onClick={() => setView("mine")}>Back to mining grid</button>
+        <p className="stake-warning">Testnet preview. Staking remains inactive until the audited DSLVR vault is deployed.</p>
+        <button className="back-link" onClick={() => setView("mine")}>Back to mining grid</button>
       </section>}
       <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Footer"><a href="#how">How it works</a><a href="#token">Token</a><a href="#faq">FAQ</a></nav></footer>
 

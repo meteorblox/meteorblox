@@ -1,4 +1,4 @@
-module meteorblox::game;
+module slvrblox::game;
 
 use std::option::{Self, Option};
 use sui::balance::{Self, Balance};
@@ -9,17 +9,18 @@ use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
-use meteorblox::mtbx::{Self, Refinery, RewardCap};
-use meteorblox::ledger::{Self, Ledger};
+use slvrblox::dslvr::{Self, Refinery, RewardCap};
+use slvrblox::ledger::{Self, Ledger};
 
 const TILE_COUNT: u8 = 25;
 const ROUND_MS: u64 = 60_000;
 const BPS: u64 = 10_000;
 const PROTOCOL_FEE_BPS: u64 = 1_000;
-const TREASURY_BPS: u64 = 700;
+/// Five percent of gross entries is reserved for future open-market DSLVR buybacks.
+const TREASURY_BPS: u64 = 500;
 const REWARDS_BPS: u64 = 200;
-/// Each settled round distributes 0.25 unrefined MTBX across winning stakes.
-const MTBX_ROUND_REWARD: u64 = 250_000;
+/// Each settled round distributes 0.25 unrefined DSLVR across winning stakes.
+const DSLVR_ROUND_REWARD: u64 = 250_000;
 
 const E_NOT_ADMIN: u64 = 1;
 const E_ROUND_CLOSED: u64 = 2;
@@ -61,8 +62,8 @@ public struct Game has key {
     rewards: Balance<SUI>,
     ops: Balance<SUI>,
     reward_cap: Option<RewardCap>,
-    mtbx_reward_initial: u64,
-    mtbx_reward_remaining: u64,
+    dslvr_reward_initial: u64,
+    dslvr_reward_remaining: u64,
 }
 
 public struct EntryPlaced has copy, drop {
@@ -87,7 +88,7 @@ public struct WinningsClaimed has copy, drop {
     player: address,
     round: u64,
     amount: u64,
-    mtbx_amount: u64,
+    dslvr_amount: u64,
 }
 
 fun init(ctx: &mut TxContext) {
@@ -113,17 +114,17 @@ fun init(ctx: &mut TxContext) {
         rewards: balance::zero(),
         ops: balance::zero(),
         reward_cap: option::none(),
-        mtbx_reward_initial: 0,
-        mtbx_reward_remaining: 0,
+        dslvr_reward_initial: 0,
+        dslvr_reward_remaining: 0,
     });
 }
 
-/// One-time setup transaction after package publication. The unique MTBX
+/// One-time setup transaction after package publication. The unique DSLVR
 /// authority is consumed into Game so it can never be used for manual awards.
-public entry fun bind_mtbx_rewards(
+public fun bind_dslvr_rewards(
     game: &mut Game,
     reward_cap: RewardCap,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(option::is_none(&game.reward_cap), E_REWARDS_ALREADY_BOUND);
@@ -132,7 +133,7 @@ public entry fun bind_mtbx_rewards(
 
 /// Creates the shared winnings ledger required by the continuous round
 /// engine. The owner performs this once after upgrading the package.
-public entry fun create_rewards_ledger(game: &Game, ctx: &mut TxContext) {
+public fun create_rewards_ledger(game: &Game, ctx: &mut TxContext) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     ledger::create(object::id(game), ctx);
     event::emit(LedgerCreated { game: object::id(game) });
@@ -140,7 +141,7 @@ public entry fun create_rewards_ledger(game: &Game, ctx: &mut TxContext) {
 
 /// Admin opens the first round, or the next round after every winning entry
 /// from the previous round has claimed.
-public entry fun open_next_round(game: &mut Game, clock: &Clock, ctx: &TxContext) {
+public fun open_next_round(game: &mut Game, clock: &Clock, ctx: &mut TxContext) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(game.settled, E_ROUND_OPEN);
     assert!(game.winning_entries_remaining == 0, E_CLAIMS_PENDING);
@@ -151,8 +152,8 @@ public entry fun open_next_round(game: &mut Game, clock: &Clock, ctx: &TxContext
     game.settled = false;
     game.winning_tile = option::none();
     game.winner_pool_initial = 0;
-    game.mtbx_reward_initial = 0;
-    game.mtbx_reward_remaining = 0;
+    game.dslvr_reward_initial = 0;
+    game.dslvr_reward_remaining = 0;
 
     let mut i = 0;
     while (i < TILE_COUNT) {
@@ -163,12 +164,12 @@ public entry fun open_next_round(game: &mut Game, clock: &Clock, ctx: &TxContext
 
 /// Place real SUI on one tile. A programmable transaction can call this
 /// repeatedly to fund several tiles with one wallet approval.
-public entry fun place(
+public fun place(
     game: &mut Game,
     tile: u8,
     payment: Coin<SUI>,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     place_for(game, tile, coin::into_balance(payment), tx_context::sender(ctx), clock);
 }
@@ -209,7 +210,7 @@ public(package) fun place_for(
 /// the timer expires. The winner is sampled uniformly from occupied tiles so
 /// every successful settlement has one fixed outcome and cannot be retried to
 /// reject an empty tile.
-public entry fun settle(
+entry fun settle(
     game: &mut Game,
     refinery: &Refinery,
     random_state: &Random,
@@ -249,10 +250,10 @@ public entry fun settle(
     game.winning_tile = option::some(winner_tile);
     game.winner_pool_initial = balance::value(&game.pot);
     game.winning_entries_remaining = count;
-    let capacity = mtbx::remaining_award_capacity(refinery);
-    let round_reward = if (capacity < MTBX_ROUND_REWARD) capacity else MTBX_ROUND_REWARD;
-    game.mtbx_reward_initial = round_reward;
-    game.mtbx_reward_remaining = round_reward;
+    let capacity = dslvr::remaining_award_capacity(refinery);
+    let round_reward = if (capacity < DSLVR_ROUND_REWARD) capacity else DSLVR_ROUND_REWARD;
+    game.dslvr_reward_initial = round_reward;
+    game.dslvr_reward_remaining = round_reward;
 
     event::emit(RoundSettled {
         round: game.round,
@@ -264,8 +265,8 @@ public entry fun settle(
 
 /// Permissionless keeper operation. It settles an expired occupied round,
 /// credits every winner before any claim, and immediately opens the next
-/// 60-second round. MTBX positions begin refining at settlement time.
-public entry fun settle_and_open_next(
+/// 60-second round. DSLVR positions begin refining at settlement time.
+entry fun settle_and_open_next(
     game: &mut Game,
     refinery: &mut Refinery,
     ledger: &mut Ledger,
@@ -298,11 +299,11 @@ public entry fun settle_and_open_next(
 
     let winning_total = *game.tile_totals.borrow(winner as u64);
     let winner_pool = balance::value(&game.pot);
-    let capacity = mtbx::remaining_award_capacity(refinery);
-    let round_mtbx = if (capacity < MTBX_ROUND_REWARD) capacity else MTBX_ROUND_REWARD;
+    let capacity = dslvr::remaining_award_capacity(refinery);
+    let round_dslvr = if (capacity < DSLVR_ROUND_REWARD) capacity else DSLVR_ROUND_REWARD;
     let settled_round = game.round;
     let mut sui_remaining = winner_pool;
-    let mut mtbx_remaining = round_mtbx;
+    let mut dslvr_remaining = round_dslvr;
     let mut winning_left = 0u64;
     let mut count_i = 0;
     while (count_i < game.entries.length()) {
@@ -315,15 +316,15 @@ public entry fun settle_and_open_next(
         let Entry { player, round, tile: entry_tile, stake, claimed: _ } = game.entries.pop_back();
         if (round == settled_round && entry_tile == winner) {
             let sui_amount = if (winning_left == 1) sui_remaining else mul_div(winner_pool, stake, winning_total);
-            let mtbx_amount = if (winning_left == 1) mtbx_remaining else mul_div(round_mtbx, stake, winning_total);
+            let dslvr_amount = if (winning_left == 1) dslvr_remaining else mul_div(round_dslvr, stake, winning_total);
             ledger::credit(ledger, player, settled_round, balance::split(&mut game.pot, sui_amount));
-            if (mtbx_amount > 0) {
-                mtbx::award_from_game(refinery, option::borrow(&game.reward_cap), player, mtbx_amount, clock);
+            if (dslvr_amount > 0) {
+                dslvr::award_from_game(refinery, option::borrow(&game.reward_cap), player, dslvr_amount, clock);
             };
             sui_remaining = sui_remaining - sui_amount;
-            mtbx_remaining = mtbx_remaining - mtbx_amount;
+            dslvr_remaining = dslvr_remaining - dslvr_amount;
             winning_left = winning_left - 1;
-            event::emit(WinningsClaimed { player, round: settled_round, amount: sui_amount, mtbx_amount });
+            event::emit(WinningsClaimed { player, round: settled_round, amount: sui_amount, dslvr_amount });
         };
     };
 
@@ -332,7 +333,7 @@ public entry fun settle_and_open_next(
 }
 
 /// Permissionless keeper operation for a round with no deployments.
-public entry fun close_empty_and_open_next(game: &mut Game, clock: &Clock) {
+public fun close_empty_and_open_next(game: &mut Game, clock: &Clock) {
     assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
     assert!(balance::value(&game.pot) == 0, E_ROUND_NOT_EMPTY);
     let mut i = 0;
@@ -351,8 +352,8 @@ fun reset_and_open(game: &mut Game, clock: &Clock) {
     game.winning_tile = option::none();
     game.winner_pool_initial = 0;
     game.winning_entries_remaining = 0;
-    game.mtbx_reward_initial = 0;
-    game.mtbx_reward_remaining = 0;
+    game.dslvr_reward_initial = 0;
+    game.dslvr_reward_remaining = 0;
     let mut i = 0;
     while (i < TILE_COUNT) {
         *game.tile_totals.borrow_mut(i as u64) = 0;
@@ -362,7 +363,7 @@ fun reset_and_open(game: &mut Game, clock: &Clock) {
 
 /// Owner-only recovery for an expired round that received no entries. This
 /// cannot discard player funds because it requires the pot to be exactly zero.
-public entry fun close_empty_round(game: &mut Game, clock: &Clock, ctx: &TxContext) {
+public fun close_empty_round(game: &mut Game, clock: &Clock, ctx: &mut TxContext) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
     assert!(balance::value(&game.pot) == 0, E_ROUND_NOT_EMPTY);
@@ -376,14 +377,14 @@ public entry fun close_empty_round(game: &mut Game, clock: &Clock, ctx: &TxConte
     game.winning_tile = option::none();
     game.winner_pool_initial = 0;
     game.winning_entries_remaining = 0;
-    game.mtbx_reward_initial = 0;
-    game.mtbx_reward_remaining = 0;
+    game.dslvr_reward_initial = 0;
+    game.dslvr_reward_remaining = 0;
     event::emit(EmptyRoundClosed { round: game.round });
 }
 
 /// Claims one winning entry. A player with multiple entries can call this
 /// repeatedly in the same programmable transaction.
-public entry fun claim(
+public fun claim(
     game: &mut Game,
     refinery: &mut Refinery,
     clock: &Clock,
@@ -414,21 +415,21 @@ public entry fun claim(
     } else {
         mul_div(game.winner_pool_initial, stake, winning_total)
     };
-    let mtbx_amount = if (game.winning_entries_remaining == 1) {
-        game.mtbx_reward_remaining
+    let dslvr_amount = if (game.winning_entries_remaining == 1) {
+        game.dslvr_reward_remaining
     } else {
-        mul_div(game.mtbx_reward_initial, stake, winning_total)
+        mul_div(game.dslvr_reward_initial, stake, winning_total)
     };
     assert!(option::is_some(&game.reward_cap), E_REWARDS_NOT_BOUND);
-    if (mtbx_amount > 0) {
-        mtbx::award_from_game(
+    if (dslvr_amount > 0) {
+        dslvr::award_from_game(
             refinery,
             option::borrow(&game.reward_cap),
             sender,
-            mtbx_amount,
+            dslvr_amount,
             clock,
         );
-        game.mtbx_reward_remaining = game.mtbx_reward_remaining - mtbx_amount;
+        game.dslvr_reward_remaining = game.dslvr_reward_remaining - dslvr_amount;
     };
     game.winning_entries_remaining = game.winning_entries_remaining - 1;
     let payout = coin::from_balance(balance::split(&mut game.pot, amount), ctx);
@@ -437,7 +438,7 @@ public entry fun claim(
         player: sender,
         round: game.round,
         amount,
-        mtbx_amount,
+        dslvr_amount,
     });
 }
 
@@ -452,7 +453,7 @@ public fun pot(game: &Game): u64 { balance::value(&game.pot) }
 public fun treasury_balance(game: &Game): u64 { balance::value(&game.treasury) }
 public fun rewards_balance(game: &Game): u64 { balance::value(&game.rewards) }
 public fun ops_balance(game: &Game): u64 { balance::value(&game.ops) }
-public fun mtbx_round_reward(): u64 { MTBX_ROUND_REWARD }
+public fun dslvr_round_reward(): u64 { DSLVR_ROUND_REWARD }
 
 fun mul_div(value: u64, numerator: u64, denominator: u64): u64 {
     (((value as u128) * (numerator as u128)) / (denominator as u128)) as u64
@@ -461,11 +462,13 @@ fun mul_div(value: u64, numerator: u64, denominator: u64): u64 {
 #[test]
 fun test_fee_math() {
     assert!(mul_div(10_000, PROTOCOL_FEE_BPS, BPS) == 1_000, 100);
-    assert!(mul_div(10_000, TREASURY_BPS, BPS) == 700, 101);
+    assert!(mul_div(10_000, TREASURY_BPS, BPS) == 500, 101);
     assert!(mul_div(10_000, REWARDS_BPS, BPS) == 200, 102);
 }
 
 #[test]
-fun test_mtbx_round_reward_is_quarter_token() {
-    assert!(MTBX_ROUND_REWARD == 250_000, 110);
+fun test_dslvr_round_reward_is_quarter_token() {
+    assert!(DSLVR_ROUND_REWARD == 250_000, 110);
 }
+
+

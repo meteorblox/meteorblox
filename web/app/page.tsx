@@ -579,7 +579,7 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand slvr-brand" href="#" aria-label="SLVRBLOX home" onClick={() => setView("mine")}><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></a>
-        <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button><button className={view === "stake" ? "active" : ""} onClick={() => setView("stake")}>Stake</button></nav>
+        <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button><button className={view === "stake" ? "active" : ""} onClick={() => setView("stake")}>Stake</button><a href="/explore">Explore</a></nav>
         <div className="top-actions">
           <div className="protocol-links" aria-label="SLVRBLOX community links">
             <a href="https://x.com/slvrblox" target="_blank" rel="noreferrer" title="SLVRBLOX on X" aria-label="SLVRBLOX on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.77 7.74L23.2 22h-6.24l-4.89-6.39L6.48 22H3.36l7.25-8.29L2.97 2h6.4l4.42 5.84L18.9 2Zm-1.1 17.84h1.73L8.43 4.05H6.58L17.8 19.84Z" /></svg></a>

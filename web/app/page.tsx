@@ -502,17 +502,23 @@ export default function Home() {
             <button title="MeteorBlox Discord — coming soon" aria-label="MeteorBlox Discord, coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.54 5.34A17.3 17.3 0 0 0 15.29 4l-.52 1.06a15.77 15.77 0 0 0-5.54 0L8.7 4A17.45 17.45 0 0 0 4.45 5.34C1.76 9.43 1.03 13.42 1.4 17.35a17.1 17.1 0 0 0 5.21 2.69l1.26-1.76a11.1 11.1 0 0 1-1.98-.97l.49-.38c3.82 1.8 7.96 1.8 11.73 0l.5.38c-.64.38-1.3.7-1.99.97l1.26 1.76a17.03 17.03 0 0 0 5.21-2.69c.43-4.56-.73-8.51-3.55-12.01ZM8.68 14.93c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.93 2.4-2.1 2.4Zm6.64 0c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.92 2.4-2.1 2.4Z" /></svg></button>
           </div>
           <div className="asset-tickers" aria-label="Token prices">
-            <span className="price-chip mtbx-chip" title="DSLVR preview"><img className="ticker-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" /><strong><small>DSLVR</small>$0.00</strong></span>
+            <span className="price-chip mtbx-chip" title="DSLVR preview"><img className="ticker-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" /><strong>$0.00</strong></span>
             <span className="price-chip sui-chip" title="SUI price"><i className="ticker-sui" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/><path d="M11 24.5c1.4 2.6 4.5 3.7 7.2 2.4 1.1-.5 2-1.4 2.6-2.4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg></i><strong>{suiPrice === null ? "Loading" : `$${suiPrice.toFixed(2)}`}</strong></span>
           </div>
           <span className="network"><i /> Sui Testnet</span><button className="wallet" onClick={openAccountDrawer}>{currentAccount ? `${currentAccount.address.slice(0, 6)}...${currentAccount.address.slice(-4)}` : "Sign in"}</button>
         </div>
       </header>
 
+      <aside className="beta-banner" aria-label="Testnet beta notice">
+        <strong>TESTNET BETA</strong>
+        <span>Test tokens have no monetary value. Bugs and resets may occur.</span>
+        <a href="https://github.com/meteorblox/meteorblox/issues/new" target="_blank" rel="noreferrer">Report feedback</a>
+      </aside>
+
       <section className="round-strip" aria-label="Current round">
         <div><small>ROUND</small><strong>{chainLoading ? "—" : `#${String(chainState?.round ?? 0).padStart(6, "0")}`}</strong></div><div><small>TIME LEFT</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></div>
         <div><small>DEPLOYED</small><strong className="deployed-total"><i className="round-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{chainLoading ? "—" : (chainState?.potSui ?? 0).toFixed(4)}</strong></div>
-        <div><small>SLVR STRIKE</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" />{mtbxRoundReward.toFixed(2)}</strong></div>
+        <div><small>DSLVR STRIKE</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" />{mtbxRoundReward.toFixed(2)}</strong></div>
       </section>
 
       <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">

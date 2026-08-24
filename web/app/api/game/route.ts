@@ -6,7 +6,7 @@ const refineryId = "0xb0804c01a08e5e1fc86c831b7ed5cd18fd9189e4d8d45ca7e3617acda1
 const upgradeCapId = "0x9cff31debda813ddc8b4997143ca9ed60f4f1b75147a9dd99f33948fc28acc2d";
 const packageId = "0xbd82e0552e768059b7768e78963c59c9020003b1cf6c9c078744e6b617628f6e";
 const ledgerId = "0x7f795f4533202fbcd83a5c20a505f18126e9740a8e804e1496eb56f872a6cb8f";
-const autoplayRegistryId = "";
+const autoplayRegistryId = "0x12686fca999b0457f572ca716c2eb7276510a13f26772b8222aa8cdf88f154cf";
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 

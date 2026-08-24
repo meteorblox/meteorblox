@@ -14,7 +14,7 @@ type GameEntry = { player: string; round: string; tile: number; stake: string; c
 type GameJson = {
   round: string; closes_at_ms: string; settled: boolean; winning_tile: number | null;
   tile_totals: string[]; entries: GameEntry[]; pot: string; winner_pool_initial: string;
-  winning_entries_remaining: string; mtbx_reward_initial: string; mtbx_reward_remaining: string;
+  winning_entries_remaining: string; dslvr_reward_initial: string; dslvr_reward_remaining: string;
   reward_cap: unknown | null;
 };
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     ) : [];
     const userWinningStake = userWinningEntries.reduce((sum, entry) => sum + BigInt(entry.stake), 0n);
     const winnerPool = BigInt(game.winner_pool_initial);
-    const mtbxPool = BigInt(game.mtbx_reward_initial);
+    const mtbxPool = BigInt(game.dslvr_reward_initial);
     const estimatedSui = winningTotal > 0n ? winnerPool * userWinningStake / winningTotal : 0n;
     const estimatedMtbx = winningTotal > 0n ? mtbxPool * userWinningStake / winningTotal : 0n;
     const userPositions = address ? refinery.positions.filter((position) => position.owner.toLowerCase() === address && !position.claimed) : [];

@@ -32,11 +32,29 @@ test("renders development preview metadata", async () => {
   assert.match(await response.text(), developmentPreviewMeta);
 });
 
-test("ships the combined SUI and MTBX reward language", async () => {
+test("ships the SLVRBLOX Testnet preview", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) =>
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   );
-  assert.match(source, /0\.25 MTBX/);
-  assert.match(source, /Claim available SUI \+ refined MTBX/);
-  assert.match(source, /not deployed to Testnet yet/);
+  assert.match(source, /SLVRBLOX/);
+  assert.match(source, /DSLVR/);
+  assert.match(source, /DSLVR simulated Testnet value/);
+  assert.match(source, /\$10\.00/);
+});
+
+test("ships verified Explore activity and tester diagnostics", async () => {
+  const [home, explore, api] = await Promise.all([
+    import("node:fs/promises").then(({ readFile }) => readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then(({ readFile }) => readFile(new URL("../app/explore/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then(({ readFile }) => readFile(new URL("../app/api/explore/route.ts", import.meta.url), "utf8")),
+  ]);
+  assert.match(home, /Copy report/);
+  assert.match(home, /Latest transaction/);
+  assert.match(explore, /Verified activity/);
+  assert.match(explore, /DSLVR TEST VALUE/);
+  assert.match(explore, /\$10\.00 <small>simulated<\/small>/);
+  assert.match(explore, /Copy diagnostic report/);
+  assert.match(api, /EntryPlaced/);
+  assert.match(api, /RoundSettled/);
+  assert.match(api, /RewardAwarded/);
 });

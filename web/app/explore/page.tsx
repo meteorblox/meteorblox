@@ -7,10 +7,9 @@ type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; pl
 type ExploreActivity = {
   packageId: string; indexedEntries: number; indexedMiners: number; indexedDeployedSui: number;
   rounds: Array<{ round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
-  rewards: Array<{ owner: string; amountDslvr: number; transaction: string | null; timestamp: string | null }>;
+  motherlodes: Array<{ round: number; winningTile: number; addedDslvr: number; balanceDslvr: number; hit: boolean; transaction: string | null; timestamp: string | null }>;
 };
 
-const shortAddress = (address: string) => address ? `${address.slice(0, 7)}...${address.slice(-5)}` : "Unknown";
 const dateLabel = (timestamp: string | null) => timestamp ? new Date(timestamp).toLocaleString() : "Confirmed";
 
 export default function ExplorePage() {
@@ -73,15 +72,15 @@ export default function ExplorePage() {
     </section>
 
     <section className="explore-activity"><h2>Verified activity</h2>
-      <div className="explore-tabs"><button className={tab === "rounds" ? "active" : ""} onClick={() => setTab("rounds")}>Rounds</button><button className={tab === "motherloads" ? "active" : ""} onClick={() => setTab("motherloads")}>Motherloads</button></div>
+      <div className="explore-tabs"><button className={tab === "rounds" ? "active" : ""} onClick={() => setTab("rounds")}>Rounds</button><button className={tab === "motherloads" ? "active" : ""} onClick={() => setTab("motherloads")}>DSLVR Motherlode</button></div>
       {tab === "rounds" ? <div className="activity-table">
-        <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>DEPLOYED</span><span>REWARD POOL</span><span>SETTLEMENT</span></div>
+        <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>DEPLOYED</span><span>SUI WINNER POOL</span><span>SETTLEMENT</span></div>
         {(activity?.rounds ?? []).map((round) => <div className="activity-row" key={`${round.round}-${round.transaction}`}><strong>#{String(round.round).padStart(6, "0")}</strong><span>Block {round.winningTile}</span><span>{round.deployedSui.toFixed(4)} SUI</span><span>{round.rewardPoolSui.toFixed(4)} SUI</span>{round.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${round.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(round.timestamp)}>View ↗</a> : <span>Confirmed</span>}</div>)}
         {!activity?.rounds.length && <p className="activity-empty">Waiting for the next settlement.</p>}
       </div> : <div className="reward-list">
-        <div className="activity-row activity-head"><span>MINER</span><span>DSLVR AWARDED</span><span>TIME</span><span>STATUS</span><span>TRANSACTION</span></div>
-        {(activity?.rewards ?? []).map((reward, index) => <div className="activity-row" key={`${reward.transaction}-${index}`}><strong>{shortAddress(reward.owner)}</strong><span>{reward.amountDslvr.toFixed(6)} DSLVR</span><span>{dateLabel(reward.timestamp)}</span><span className="status-live">Confirmed</span>{reward.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${reward.transaction}`} target="_blank" rel="noreferrer">View ↗</a> : <span>—</span>}</div>)}
-        {!activity?.rewards.length && <p className="activity-empty">Confirmed DSLVR rewards will appear here.</p>}
+        <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>ADDED</span><span>DSLVR BALANCE</span><span>RESULT</span></div>
+        {(activity?.motherlodes ?? []).map((motherlode, index) => <div className="activity-row" key={`${motherlode.transaction}-${index}`}><strong>#{String(motherlode.round).padStart(6, "0")}</strong><span>Block {motherlode.winningTile}</span><span>{motherlode.addedDslvr.toFixed(2)} DSLVR</span><span>{motherlode.balanceDslvr.toFixed(2)} DSLVR</span>{motherlode.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${motherlode.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(motherlode.timestamp)}>{motherlode.hit ? "HIT ↗" : "Rolled over ↗"}</a> : <span>{motherlode.hit ? "HIT" : "Rolled over"}</span>}</div>)}
+        {!activity?.motherlodes.length && <p className="activity-empty">Waiting for the first confirmed Motherlode round.</p>}
       </div>}
     </section>
 

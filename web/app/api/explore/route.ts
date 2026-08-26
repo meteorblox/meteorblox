@@ -1,6 +1,7 @@
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
 
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
+const motherlodePackageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
 type EventRecord = { json?: Record<string, unknown>; timestamp?: string | null; transactionDigest?: string | null };
@@ -9,10 +10,10 @@ const dslvr = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_0
 
 export async function GET() {
   try {
-    const [settledResult, entryResult, rewardResult] = await Promise.all([
+    const [settledResult, entryResult, motherlodeResult] = await Promise.all([
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 25, order: "descending" }),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
-      eventClient.core.listEvents({ filter: { eventType: `${packageId}::dslvr::RewardAwarded` }, limit: 25, order: "descending" }),
+      eventClient.core.listEvents({ filter: { eventType: `${motherlodePackageId}::game::MotherlodeUpdated` }, limit: 25, order: "descending" }),
     ]);
     const entries = entryResult.events as EventRecord[];
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
@@ -26,8 +27,9 @@ export async function GET() {
         deployedSui: sui(event.json?.gross), rewardPoolSui: sui(event.json?.winner_pool),
         transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
       })),
-      rewards: (rewardResult.events as EventRecord[]).map((event) => ({
-        owner: String(event.json?.owner ?? ""), amountDslvr: dslvr(event.json?.amount),
+      motherlodes: (motherlodeResult.events as EventRecord[]).map((event) => ({
+        round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.tile ?? 0) + 1,
+        addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), hit: Boolean(event.json?.hit),
         transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
       })),
     }, { headers: { "cache-control": "no-store" } });

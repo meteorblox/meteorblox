@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type ExploreState = { round: number; potSui: number; playedTiles: number[]; settled: boolean };
+type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; playedTiles: number[]; settled: boolean };
 type ExploreActivity = {
   packageId: string; indexedEntries: number; indexedMiners: number; indexedDeployedSui: number;
   rounds: Array<{ round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
@@ -64,6 +64,11 @@ export default function ExplorePage() {
       <article><h2>Mining</h2><dl><div><dt>CURRENT ROUND</dt><dd>#{String(data?.round ?? 0).padStart(6, "0")}</dd></div><div><dt>CURRENTLY DEPLOYED</dt><dd>{(data?.potSui ?? 0).toFixed(4)} SUI</dd></div><div><dt>BLOCKS PLAYED</dt><dd>{data?.playedTiles?.length ?? 0} / 25</dd></div></dl></article>
       <article><h2>Indexed activity</h2><dl><div><dt>ENTRY EVENTS</dt><dd>{activity?.indexedEntries ?? "—"}</dd></div><div><dt>UNIQUE MINERS</dt><dd>{activity?.indexedMiners ?? "—"}</dd></div><div><dt>DEPLOYED IN INDEX</dt><dd>{activity ? `${activity.indexedDeployedSui.toFixed(4)} SUI` : "—"}</dd></div></dl></article>
       <article><h2>Supply</h2><dl><div><dt>MAX DSLVR</dt><dd className="coin-value"><img src="/brand/dslvr-coin.png" alt="" />5,000,000</dd></div><div><dt>CIRCULATING</dt><dd>Testnet</dd></div><div><dt>REFINING</dt><dd>Time locked</dd></div></dl></article>
+    </section>
+
+    <section className="motherload-card">
+      <img src="/brand/dslvr-coin.png" alt="DSLVR" />
+      <div><small>LIVE DSLVR MOTHERLODE</small><strong>{(data?.motherlodeDslvr ?? 0).toFixed(2)} DSLVR</strong><p>+0.20 DSLVR after every occupied round · 1-in-500 chance to hit</p></div>
     </section>
 
     <section className="explore-activity"><h2>Verified activity</h2>

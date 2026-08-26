@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; playedTiles: number[]; settled: boolean };
 type ExploreActivity = {
@@ -52,8 +53,8 @@ export default function ExplorePage() {
 
   return <main className="explore-page">
     <header className="explore-topbar">
-      <a className="explore-brand" href="/"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></a>
-      <nav><a href="/">Mine</a><a href="/?view=stake">Stake</a><a className="active" href="/explore">Explore</a></nav>
+      <Link className="explore-brand" href="/"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></Link>
+      <nav><Link href="/">Mine</Link><Link href="/?view=stake">Stake</Link><Link className="active" href="/explore">Explore</Link></nav>
       <span className="explore-network"><i /> Sui Testnet</span>
     </header>
 
@@ -85,6 +86,6 @@ export default function ExplorePage() {
     </section>
 
     <section className="diagnostic-card"><div><p>TESTNET SUPPORT</p><h2>Found something wrong?</h2><span>Copy the current round, package, settlement and browser details—never private keys.</span></div><button onClick={() => setReportOpen((open) => !open)}>{reportOpen ? "Close report" : "Report a bug"}</button>{reportOpen && <div className="diagnostic-report"><pre>{diagnosticReport}</pre><div><button onClick={copyReport}>{copied ? "Copied" : "Copy diagnostic report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></div></div>}</section>
-    <footer className="explore-footer"><span>SLVRBLOX · Sui Testnet</span><a href="/">Back to mining grid →</a></footer>
+    <footer className="explore-footer"><span>SLVRBLOX · Sui Testnet</span><Link href="/">Back to mining grid →</Link></footer>
   </main>;
 }

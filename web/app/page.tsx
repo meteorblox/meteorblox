@@ -7,6 +7,7 @@ import { upgradeData } from "./upgrade-data";
 import { dslvrPublishData } from "./dslvr-publish-data";
 import { testUsdcPublishData } from "./test-usdc-publish-data";
 import { rehearsalDslvrPublishData } from "./rehearsal-dslvr-publish-data";
+import { rehearsalSalePublishData } from "./rehearsal-sale-publish-data";
 
 // The current Testnet upgrade includes the automatic empty-round rollover fix.
 
@@ -583,6 +584,27 @@ export default function Home() {
     } finally { setRoundAction(false); }
   }
 
+  async function publishRehearsalSale() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner Testnet wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(100_000_000);
+    const upgradeCap = transaction.publish({
+      modules: [...rehearsalSalePublishData.modules],
+      dependencies: [...rehearsalSalePublishData.dependencies],
+    });
+    transaction.transferObjects([upgradeCap], currentAccount.address);
+    setPublishingPackage(true);
+    setNotice("Waiting for approval to publish the presale contract on Sui Testnet only...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`Presale contract published on Testnet. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Presale Testnet publish failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setPublishingPackage(false); }
+  }
+
   async function closeEmptyRound() {
     if (!currentAccount) return setConnectOpen(true);
     if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
@@ -763,6 +785,7 @@ export default function Home() {
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC ? Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR ? Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Mint 5 mock tUSDC</h2><p>Creates exactly 5 valueless Testnet tUSDC for the one-DSLVR rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 5 tUSDC ? Testnet"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Publish presale contract</h2><p>Publishes the tested generic sale and buyer-vesting contract on Testnet. It cannot receive Mainnet USDC.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalSale}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Presale Contract ? Testnet"}</button></article>}
         <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined MTBX" : "Refined MTBX"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}...${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique DSLVR RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for wallet approval?" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}

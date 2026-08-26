@@ -30,10 +30,32 @@ const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
 const mtbx = (units: bigint) => Number(units) / 1_000_000;
 const decodeTiles = (value: string | number[]) => Array.isArray(value) ? value : Array.from(Uint8Array.from(atob(value), (character) => character.charCodeAt(0)));
 
+async function getMotherlodeBalance() {
+  const listResponse = await fetch("https://fullnode.testnet.sui.io:443", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "suix_getDynamicFields", params: [gameId, null, 50] }),
+    cache: "no-store",
+  });
+  const list = await listResponse.json() as { result?: { data?: Array<{ objectId: string; objectType: string }> } };
+  const field = list.result?.data?.find((item) => item.objectType.includes("::game::MotherlodeState"));
+  if (!field) return 0n;
+  const objectResponse = await fetch("https://fullnode.testnet.sui.io:443", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "sui_getObject", params: [field.objectId, { showContent: true }] }),
+    cache: "no-store",
+  });
+  const object = await objectResponse.json() as {
+    result?: { data?: { content?: { fields?: { value?: { fields?: { balance?: string } } } } } };
+  };
+  return BigInt(object.result?.data?.content?.fields?.value?.fields?.balance ?? "0");
+}
+
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, walletBalanceResult, keeperBalanceResult] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, walletBalanceResult, keeperBalanceResult, motherlodeBalance] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
@@ -42,6 +64,7 @@ export async function GET(request: Request) {
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
       address ? client.core.getBalance({ owner: address }).catch(() => null) : Promise.resolve(null),
       client.core.getBalance({ owner: keeperAddress }).catch(() => null),
+      getMotherlodeBalance().catch(() => 0n),
     ]);
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
@@ -101,6 +124,7 @@ export async function GET(request: Request) {
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,
+      motherlodeDslvr: mtbx(motherlodeBalance),
       autoplayPlans,
       playedTiles,
       lastRound,

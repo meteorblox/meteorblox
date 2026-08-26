@@ -3,8 +3,8 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const siteRoot = resolve(import.meta.dirname, "..");
-const contractRoot = resolve(siteRoot, "../slvrblox-move");
-const sui = resolve(siteRoot, "../toolchain/bin/sui.exe");
+const contractRoot = resolve(siteRoot, "../../slvrblox-move");
+const sui = resolve(siteRoot, "../../toolchain/bin/sui.exe");
 const output = execFileSync(
   sui,
   ["move", "build", "--dump-bytecode-as-base64", "--no-tree-shaking", "--silence-warnings"],
@@ -15,9 +15,9 @@ const output = execFileSync(
       ...process.env,
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: "safe.directory",
-      GIT_CONFIG_VALUE_0: resolve(siteRoot, "../move-home-cache/git/https___github_com_MystenLabs_sui_git_51d177ad7d65102fc368b582408f466d97b31548").replaceAll("\\", "/"),
-      MOVE_HOME: resolve(siteRoot, "../move-home-cache"),
-      SUI_CONFIG_DIR: resolve(siteRoot, "../sui-test-config"),
+      GIT_CONFIG_VALUE_0: resolve(siteRoot, "../../move-home-cache/git/https___github_com_MystenLabs_sui_git_51d177ad7d65102fc368b582408f466d97b31548").replaceAll("\\", "/"),
+      MOVE_HOME: resolve(siteRoot, "../../move-home-cache"),
+      SUI_CONFIG_DIR: resolve(siteRoot, "../../sui-test-config"),
     },
   },
 );

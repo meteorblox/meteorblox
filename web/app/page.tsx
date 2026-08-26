@@ -26,9 +26,10 @@ const rehearsalSaleId = "0x65181b5c42bcc103d42db5baea5ae162622d5842ff52457e894a2
 const rehearsalSaleAdminCapId = "0x090edff4a5fa47ae51599c57e4b2e28a31475f480fa0ba101234c5f5403981a8";
 const rehearsalTestUsdcCoinId = "0xc86b21d8a46808713f973e38ca480e6ffcbe6ee7cd8fc2a34176b2158194baf9";
 const rehearsalLaunchAtMs = 1_787_709_250_124;
-const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
+const dslvrOriginPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
+const packageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
 const continuousPackageId = packageId;
-const stakingPackageId = "0x98dc49987a346d014733d0e7a9214002a8b6a1d72fa22873ee66235c187f8340";
+const stakingPackageId = packageId;
 const upgradeBasePackageId = stakingPackageId;
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
@@ -37,7 +38,7 @@ const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 const stakingVaultId = "0xed814a5a13886244d1dc2a6e136d971cd5f52e27b33d01916c16590fcbbe5adc";
-const dslvrCoinType = `${packageId}::dslvr::DSLVR`;
+const dslvrCoinType = `${dslvrOriginPackageId}::dslvr::DSLVR`;
 const suiClockId = "0x6";
 const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
@@ -919,7 +920,7 @@ export default function Home() {
         </div>
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>Deploy DSLVR Motherlode</h2><p>Upgrade the live Testnet game to add 0.2 DSLVR per occupied round and the 1-in-500 winning-block Motherlode.</p>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet Motherlode"}</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
+        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>DSLVR Motherlode live</h2><p>The live Testnet game now adds 0.2 DSLVR per occupied round with a 1-in-500 winning-block Motherlode.</p>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled>Motherlode upgrade live</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 5 mock tUSDC</h2><p>Creates exactly 5 valueless Testnet tUSDC for the one-DSLVR rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 5 tUSDC — Testnet"}</button></article>}

@@ -9,6 +9,7 @@ import { dslvrPublishData } from "./dslvr-publish-data";
 import { testUsdcPublishData } from "./test-usdc-publish-data";
 import { rehearsalDslvrPublishData } from "./rehearsal-dslvr-publish-data";
 import { rehearsalSalePublishData } from "./rehearsal-sale-publish-data";
+import { walletPreferenceKey } from "./providers";
 
 // The current Testnet upgrade adds the accumulating 1-in-500 DSLVR Motherlode.
 
@@ -978,7 +979,7 @@ export default function Home() {
         <dl className="account-details"><div><dt>Address</dt><dd><span>{`${currentAccount.address.slice(0, 8)}...${currentAccount.address.slice(-6)}`}</span><button aria-label="Copy wallet address" onClick={copyAddress}>Copy</button></dd></div><div><dt>Network</dt><dd><span className="account-network"><i /> Sui Testnet</span></dd></div><div><dt>Wallet</dt><dd>{currentWallet?.name ?? "Sui wallet"}</dd></div></dl>
         <section className="account-portfolio"><h3>Portfolio</h3><dl><div><dt>SUI deployed</dt><dd>{lifetimeDeployed.toFixed(4)} SUI</dd></div><div><dt>MTBX refined</dt><dd>On-chain</dd></div><div><dt>MTBX unrefined</dt><dd>On-chain</dd></div><div className="portfolio-total"><dt>Game access</dt><dd>Live Testnet</dd></div></dl></section>
         <a className="account-explorer" href={`https://suiscan.xyz/testnet/account/${currentAccount.address}`} target="_blank" rel="noreferrer">View wallet on SuiScan ↗</a>
-        <button className="account-disconnect" onClick={() => { void dAppKit.disconnectWallet(); setAccountOpen(false); setNotice("Wallet disconnected."); }}>Disconnect wallet</button>
+        <button className="account-disconnect" onClick={() => { window.localStorage.removeItem(walletPreferenceKey); void dAppKit.disconnectWallet(); setAccountOpen(false); setNotice("Wallet disconnected."); }}>Disconnect wallet</button>
       </aside></div>}
     </main>
   );

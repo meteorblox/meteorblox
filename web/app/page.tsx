@@ -22,6 +22,9 @@ const rehearsalAllocationAdminCapId = "0xaa9d8a2f704fcab0aba14b7f59a0bdbcdbed117
 const rehearsalSalePackageId = "0x22b312bf3dca15cf7631863865ce708d224c3ca8d4289cb9d658ad7929e4a326";
 const rehearsalDslvrType = `${rehearsalTokenPackageId}::dslvr::DSLVR`;
 const rehearsalTestUsdcType = `${testPaymentPackageId}::usdc::USDC`;
+const rehearsalSaleId = "0x65181b5c42bcc103d42db5baea5ae162622d5842ff52457e894a20f116d91a6d";
+const rehearsalSaleAdminCapId = "0x090edff4a5fa47ae51599c57e4b2e28a31475f480fa0ba101234c5f5403981a8";
+const rehearsalTestUsdcCoinId = "0xc86b21d8a46808713f973e38ca480e6ffcbe6ee7cd8fc2a34176b2158194baf9";
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
 const continuousPackageId = packageId;
 const stakingPackageId = "0x98dc49987a346d014733d0e7a9214002a8b6a1d72fa22873ee66235c187f8340";
@@ -659,6 +662,37 @@ export default function Home() {
     } finally { setRoundAction(false); }
   }
 
+  async function completeRehearsalPurchase() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner Testnet wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(30_000_000);
+    transaction.moveCall({
+      target: `${rehearsalSalePackageId}::sale::set_eligible`,
+      typeArguments: [rehearsalDslvrType, rehearsalTestUsdcType],
+      arguments: [transaction.object(rehearsalSaleId), transaction.object(rehearsalSaleAdminCapId), transaction.pure.address(testnetOwner), transaction.pure.bool(true)],
+    });
+    transaction.moveCall({
+      target: `${rehearsalSalePackageId}::sale::set_paused`,
+      typeArguments: [rehearsalDslvrType, rehearsalTestUsdcType],
+      arguments: [transaction.object(rehearsalSaleId), transaction.object(rehearsalSaleAdminCapId), transaction.pure.bool(false)],
+    });
+    transaction.moveCall({
+      target: `${rehearsalSalePackageId}::sale::purchase`,
+      typeArguments: [rehearsalDslvrType, rehearsalTestUsdcType],
+      arguments: [transaction.object(rehearsalSaleId), transaction.object(rehearsalTestUsdcCoinId), transaction.object(suiClockId)],
+    });
+    setRoundAction(true);
+    setNotice("Waiting for approval to authorize the Testnet buyer and purchase exactly 1 DSLVR for 5 mock tUSDC...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`Testnet presale purchase completed. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Testnet presale purchase failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally { setRoundAction(false); }
+  }
+
   async function closeEmptyRound() {
     if (!currentAccount) return setConnectOpen(true);
     if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the METEORBLOX owner wallet.");
@@ -841,6 +875,7 @@ export default function Home() {
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Mint 5 mock tUSDC</h2><p>Creates exactly 5 valueless Testnet tUSDC for the one-DSLVR rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 5 tUSDC ? Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Publish presale contract</h2><p>Publishes the tested generic sale and buyer-vesting contract on Testnet. It cannot receive Mainnet USDC.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalSale}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Presale Contract ? Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Create funded rehearsal sale</h2><p>Atomically configures the Testnet launch vault and locks the exact 150,000 DSLVR presale allocation into a ten-minute rehearsal sale.</p><button className="deploy" disabled={roundAction} onClick={configureAndCreateRehearsalSale}>{roundAction ? "Waiting for wallet approval..." : "Configure + Create Sale ? Testnet"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL ? TESTNET ONLY</small><h2>Complete 1-DSLVR purchase</h2><p>Authorizes the rehearsal buyer, opens the sale, and spends exactly 5 valueless tUSDC to purchase 1 vested DSLVR.</p><button className="deploy" disabled={roundAction} onClick={completeRehearsalPurchase}>{roundAction ? "Waiting for wallet approval..." : "Buy 1 DSLVR for 5 tUSDC ? Testnet"}</button></article>}
         <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined MTBX" : "Refined MTBX"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}...${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique DSLVR RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for wallet approval?" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}

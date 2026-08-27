@@ -15,7 +15,6 @@ const dateLabel = (timestamp: string | null) => timestamp ? new Date(timestamp).
 export default function ExplorePage() {
   const [data, setData] = useState<ExploreState | null>(null);
   const [activity, setActivity] = useState<ExploreActivity | null>(null);
-  const [tab, setTab] = useState<"rounds" | "motherloads">("rounds");
   const [reportOpen, setReportOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -66,22 +65,13 @@ export default function ExplorePage() {
       <article><h2>Supply</h2><dl><div><dt>MAX DSLVR</dt><dd className="coin-value"><img src="/brand/dslvr-coin.png" alt="" />5,000,000</dd></div><div><dt>CIRCULATING</dt><dd>Testnet</dd></div><div><dt>REFINING</dt><dd>Time locked</dd></div></dl></article>
     </section>
 
-    <section className="motherload-card">
-      <img src="/brand/dslvr-coin.png" alt="DSLVR" />
-      <div><small>LIVE DSLVR MOTHERLODE</small><strong>{(data?.motherlodeDslvr ?? 0).toFixed(2)} DSLVR</strong><p>+0.20 DSLVR after every occupied round · 1-in-500 chance to hit</p></div>
-    </section>
-
     <section className="explore-activity"><h2>Verified activity</h2>
-      <div className="explore-tabs"><button className={tab === "rounds" ? "active" : ""} onClick={() => setTab("rounds")}>Rounds</button><button className={tab === "motherloads" ? "active" : ""} onClick={() => setTab("motherloads")}>DSLVR Motherlode</button></div>
-      {tab === "rounds" ? <div className="activity-table">
+      <div className="explore-tabs"><button className="active">Rounds</button></div>
+      <div className="activity-table">
         <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>DEPLOYED</span><span>SUI WINNER POOL</span><span>SETTLEMENT</span></div>
         {(activity?.rounds ?? []).map((round) => <div className="activity-row" key={`${round.round}-${round.transaction}`}><strong>#{String(round.round).padStart(6, "0")}</strong><span>Block {round.winningTile}</span><span>{round.deployedSui.toFixed(4)} SUI</span><span>{round.rewardPoolSui.toFixed(4)} SUI</span>{round.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${round.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(round.timestamp)}>View ↗</a> : <span>Confirmed</span>}</div>)}
         {!activity?.rounds.length && <p className="activity-empty">Waiting for the next settlement.</p>}
-      </div> : <div className="reward-list">
-        <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>ADDED</span><span>DSLVR BALANCE</span><span>RESULT</span></div>
-        {(activity?.motherlodes ?? []).map((motherlode, index) => <div className="activity-row" key={`${motherlode.transaction}-${index}`}><strong>#{String(motherlode.round).padStart(6, "0")}</strong><span>Block {motherlode.winningTile}</span><span>{motherlode.addedDslvr.toFixed(2)} DSLVR</span><span>{motherlode.balanceDslvr.toFixed(2)} DSLVR</span>{motherlode.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${motherlode.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(motherlode.timestamp)}>{motherlode.hit ? "HIT ↗" : "Rolled over ↗"}</a> : <span>{motherlode.hit ? "HIT" : "Rolled over"}</span>}</div>)}
-        {!activity?.motherlodes.length && <p className="activity-empty">Waiting for the first confirmed Motherlode round.</p>}
-      </div>}
+      </div>
     </section>
 
     <section className="diagnostic-card"><div><p>TESTNET SUPPORT</p><h2>Found something wrong?</h2><span>Copy the current round, package, settlement and browser details—never private keys.</span></div><button onClick={() => setReportOpen((open) => !open)}>{reportOpen ? "Close report" : "Report a bug"}</button>{reportOpen && <div className="diagnostic-report"><pre>{diagnosticReport}</pre><div><button onClick={copyReport}>{copied ? "Copied" : "Copy diagnostic report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></div></div>}</section>

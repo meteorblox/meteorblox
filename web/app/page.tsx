@@ -902,7 +902,8 @@ export default function Home() {
 
         <aside className="entry-panel compact-entry-panel">
           <div className="compact-round-stats">
-            <span><small>DEPLOYED</small><strong>{(chainState?.potSui ?? 0).toFixed(3)} SUI</strong></span>
+            <span><small>DEPLOYED</small><strong className="compact-stat-value"><i className="round-sui-icon" aria-label="SUI"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{(chainState?.potSui ?? 0).toFixed(3)}</strong></span>
+            <span><small>MOTHERLOAD</small><strong className="compact-stat-value"><img className="compact-dslvr-icon" src="/brand/dslvr-coin.png" alt="DSLVR" />{(chainState?.motherlodeDslvr ?? 0).toFixed(2)}</strong></span>
             <span><small>TIME</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></span>
           </div>
           <button className="compact-last-round" type="button" onClick={() => setLastRoundOpen((open) => !open)}><span>LAST ROUND</span><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")} · BLOCK ${chainState.lastRound.winningTile}` : "WAITING"}</strong></button>

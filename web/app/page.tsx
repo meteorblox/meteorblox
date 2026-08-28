@@ -860,13 +860,13 @@ export default function Home() {
         <button type="button" onClick={() => setBugReportOpen((open) => !open)}>Report a bug</button>
       </aside>
       {bugReportOpen && <section className="bug-report-panel" aria-label="Bug report diagnostics"><div><strong>DIAGNOSTIC REPORT</strong><span>Copy this report and paste it in Discord with a screenshot. It never includes wallet keys.</span></div><pre>{bugReport}</pre><footer><button type="button" onClick={copyBugReport}>{bugReportCopied ? "Copied" : "Copy report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></footer></section>}
-      {view === "stake" && <section className="round-strip" aria-label="Current round">
+      {false && <section className="round-strip" aria-label="Current round">
         <div><small>ROUND</small><strong>{chainLoading ? "—" : `#${String(chainState?.round ?? 0).padStart(6, "0")}`}</strong></div><div><small>TIME LEFT</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></div>
         <div><small>DEPLOYED</small><strong className="deployed-total"><i className="round-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{chainLoading ? "—" : (chainState?.potSui ?? 0).toFixed(4)}</strong></div>
         <div><small><span className="dslvr-word">DSLVR</span> ROUND REWARD</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" />{motherlodeRoundContribution.toFixed(2)}</strong></div>
       </section>}
 
-      {view === "stake" && <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
+      {false && <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
         <button className="last-round-toggle" type="button" aria-expanded={lastRoundOpen} onClick={() => setLastRoundOpen((open) => !open)}>
           <span><small>LAST ROUND</small><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")}` : "Waiting for settlement"}</strong></span>
           {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "x" : "+"}</i></span>}

@@ -66,7 +66,7 @@ export default function Home() {
   const [tileAmounts, setTileAmounts] = useState(startingAmounts);
   const [amount, setAmount] = useState("0.01");
   const [tileCountInput, setTileCountInput] = useState("0");
-  const rounds = 1;
+  const [rounds, setRounds] = useState(1);
   const [seconds, setSeconds] = useState(60);
   const [notice, setNotice] = useState("");
   const [bugReportOpen, setBugReportOpen] = useState(false);
@@ -212,10 +212,11 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [idleSimulation, chainState?.round]);
 
-  const total = useMemo(() => {
+  const perRoundTotal = useMemo(() => {
     const value = Number(amount);
-    return Number.isFinite(value) ? value * selected.length * rounds : 0;
-  }, [amount, selected, rounds]);
+    return Number.isFinite(value) ? value * selected.length : 0;
+  }, [amount, selected]);
+  const total = perRoundTotal * rounds;
 
   function toggleTile(tile: number) {
     const next = selected.includes(tile) ? selected.filter((item) => item !== tile) : [...selected, tile];
@@ -912,8 +913,8 @@ export default function Home() {
           <div className="amount-input"><input id="amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /><span>SUI</span></div>
           <div className="quick-values compact-quick-values"><button onClick={() => setAmount("0.01")}>+0.01</button><button onClick={() => setAmount("0.1")}>+0.1</button><button onClick={() => setAmount("1")}>+1</button></div>
           <div className="compact-step-row"><label htmlFor="tile-count">Tiles</label><div className="rounds-stepper"><button aria-label="Remove one tile" onClick={() => selectTileCount(selected.length - 1)}>&minus;</button><input id="tile-count" aria-label="Tiles" type="text" pattern="[0-9]*" maxLength={2} inputMode="numeric" value={tileCountInput} onFocus={(event) => event.currentTarget.select()} onChange={(event) => changeTileCount(event.target.value)} onBlur={() => { if (tileCountInput === "") setTileCountInput(String(selected.length)); }} /><button aria-label="Add one tile" onClick={() => selectTileCount(selected.length + 1)}>+</button></div></div>
-          <div className="compact-step-row compact-fixed-row"><label>Rounds</label><strong>1</strong></div>
-          <dl className="compact-summary"><div><dt>Per round</dt><dd className="compact-per-round"><i className="round-sui-icon" aria-label="SUI"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z"/></svg></i>{total.toFixed(4)}</dd></div></dl>
+          <div className="compact-step-row"><label htmlFor="round-count">Rounds</label><div className="rounds-stepper"><button aria-label="Remove one round" onClick={() => setRounds((current) => Math.max(1, current - 1))}>&minus;</button><input id="round-count" aria-label="Rounds" type="text" pattern="[0-9]*" maxLength={3} inputMode="numeric" value={rounds} onFocus={(event) => event.currentTarget.select()} onChange={(event) => { const digits = event.target.value.replace(/\D/g, ""); if (digits) setRounds(Math.max(1, Math.min(999, Number(digits)))); }} /><button aria-label="Add one round" onClick={() => setRounds((current) => Math.min(999, current + 1))}>+</button></div></div>
+          <dl className="compact-summary"><div><dt>Per round</dt><dd className="compact-per-round"><i className="round-sui-icon" aria-label="SUI"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z"/></svg></i>{perRoundTotal.toFixed(4)}</dd></div></dl>
           <button className="deploy" disabled={submittingPlay || !chainState || chainState.settled || seconds === 0} onClick={deploy}>{submittingPlay ? "Waiting for Slush…" : !chainState?.rewardsBound ? "Owner activation required" : chainState.settled ? "Round is settled" : seconds === 0 ? "Waiting for settlement" : "Deploy to live grid"}</button>{notice && <p className="notice" role="status">{notice}</p>}
           <button className="rewards-link" onClick={() => setView("rewards")}><span><small>YOUR ON-CHAIN REWARDS</small><strong><span><img className="reward-dslvr-icon" src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{((chainState?.unrefinedMtbx ?? 0) + (chainState?.refinedMtbx ?? 0) + (chainState?.estimatedMtbxWinnings ?? 0)).toFixed(6)} DSLVR</span><span><i className="reward-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z" /></svg></i>{(chainState?.walletSui ?? 0).toFixed(6)} SUI in wallet</span></strong></span><b>View &amp; claim &rarr;</b></button>
         </aside>

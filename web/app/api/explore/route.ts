@@ -1,7 +1,7 @@
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
 
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
-const motherlodePackageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
+const motherlodePackageId = "0x4beb56bfd9be58feaa10d815500e982d8b97a1cad23b2c19540c77f89a7a230a";
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
 type EventRecord = { json?: Record<string, unknown>; timestamp?: string | null; transactionDigest?: string | null };

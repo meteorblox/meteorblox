@@ -2,7 +2,7 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 
-const packageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
+const packageId = "0x4beb56bfd9be58feaa10d815500e982d8b97a1cad23b2c19540c77f89a7a230a";
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
@@ -27,23 +27,7 @@ async function tick() {
   const game = object.json;
   if (!game) return;
 
-  if (game.settled) {
-    const tx = new Transaction();
-    tx.setSender(keypair.toSuiAddress());
-    tx.setGasBudget(50_000_000);
-    tx.moveCall({
-      target: `${packageId}::game::open_next_round`,
-      arguments: [tx.object(gameId), tx.object(clockId)],
-    });
-
-    const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
-    if (result.$kind === "FailedTransaction") {
-      throw new Error(result.FailedTransaction.status.error?.message ?? "Round recovery failed");
-    }
-    console.log(`[keeper] Opened next round from settled state. Transaction: ${result.Transaction.digest}`);
-    await client.core.waitForTransaction({ digest: result.Transaction.digest, timeout: 60_000 });
-    return;
-  }
+  if (game.settled) return;
 
   const currentRound = BigInt(game.round);
   if (autoplayRegistryId && currentRound !== lastAutoplayRound && Date.now() < Number(game.closes_at_ms)) {
@@ -67,26 +51,21 @@ async function tick() {
   if (Date.now() < Number(game.closes_at_ms)) return;
 
   const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries ?? []).some((entry) => BigInt(entry.round) === currentRound);
+  if (!occupied) return;
+
   const tx = new Transaction();
   tx.setSender(keypair.toSuiAddress());
   tx.setGasBudget(50_000_000);
-  if (occupied) {
-    tx.moveCall({
-      target: `${packageId}::game::settle_and_open_next`,
-      arguments: [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],
-    });
-  } else {
-    tx.moveCall({
-      target: `${packageId}::game::close_empty_and_open_next`,
-      arguments: [tx.object(gameId), tx.object(clockId)],
-    });
-  }
+  tx.moveCall({
+    target: `${packageId}::game::settle_and_open_next`,
+    arguments: [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],
+  });
 
   const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
   if (result.$kind === "FailedTransaction") {
     throw new Error(result.FailedTransaction.status.error?.message ?? "Keeper transaction failed");
   }
-  console.log(`[keeper] ${occupied ? "Settled" : "Rolled over empty"} round. Transaction: ${result.Transaction.digest}`);
+  console.log(`[keeper] Settled occupied round. Transaction: ${result.Transaction.digest}`);
   await client.core.waitForTransaction({ digest: result.Transaction.digest, timeout: 60_000 });
 }
 

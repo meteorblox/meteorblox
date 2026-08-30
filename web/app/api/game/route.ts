@@ -8,6 +8,7 @@ const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec
 const packageId = "0x4beb56bfd9be58feaa10d815500e982d8b97a1cad23b2c19540c77f89a7a230a";
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
+const motherlodeEventPackageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
 const keeperAddress = "0xf03dfdd7c9f36d3ceed427538f3b717e79c22119df99171cb04e7013216cb960";
 const keeperLowBalanceMist = 250_000_000n;
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
       ledgerId ? client.core.getObject({ objectId: ledgerId, include: { json: true } }) : Promise.resolve({ object: null }),
       autoplayRegistryId ? client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } }) : Promise.resolve({ object: null }),
       eventClient.core.listEvents({ filter: { eventType: `${originPackageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
-      eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::MotherlodeUpdated` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
+      eventClient.core.listEvents({ filter: { eventType: `${motherlodeEventPackageId}::game::MotherlodeUpdated` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
       address ? client.core.getBalance({ owner: address }).catch(() => null) : Promise.resolve(null),
       client.core.getBalance({ owner: keeperAddress }).catch(() => null),
     ]);

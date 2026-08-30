@@ -76,7 +76,6 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
   const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");
-  const [lastRoundOpen, setLastRoundOpen] = useState(false);
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
@@ -872,18 +871,11 @@ export default function Home() {
         <div><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong><small>TIME</small></div>
       </section>
 
-      <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
-        <button className="last-round-toggle" type="button" aria-expanded={lastRoundOpen} onClick={() => setLastRoundOpen((open) => !open)}>
+      <section className="last-round" aria-label="Last settled round">
+        <Link className="last-round-toggle" href="/explore">
           <span><small>LAST ROUND</small><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")}` : "Waiting for settlement"}</strong></span>
-          {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "x" : "+"}</i></span>}
-        </button>
-        {lastRoundOpen && <div className="last-round-details">{chainState?.lastRound ? <>
-          <div><small>WINNING BLOCK</small><strong>{chainState.lastRound.winningTile}</strong></div>
-          <div><small>DEPLOYED</small><strong>{chainState.lastRound.deployedSui.toFixed(4)} SUI</strong></div>
-          <div><small>SUI REWARD POOL</small><strong>{chainState.lastRound.rewardPoolSui.toFixed(4)} SUI</strong></div>
-          <div><small>DSLVR AWARDED</small><strong>{chainState.lastRound.mtbxAwarded.toFixed(2)} DSLVR</strong></div>
-          {chainState.lastRound.transaction && <a href={`https://testnet.suivision.xyz/txblock/${chainState.lastRound.transaction}`} target="_blank" rel="noreferrer">View settlement</a>}
-        </> : <p>The first completed round will appear here automatically.</p>}</div>}
+          <span className="last-round-summary">{chainState?.lastRound && <b>BLOCK {chainState.lastRound.winningTile}</b>}<i aria-hidden="true">›</i></span>
+        </Link>
       </section>
 
       {view === "mine" ? <div className="workspace">

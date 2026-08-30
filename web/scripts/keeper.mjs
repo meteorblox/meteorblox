@@ -30,10 +30,15 @@ async function tick() {
   if (game.settled) return;
 
   const currentRound = BigInt(game.round);
+  let hasActiveAutoplay = false;
   if (autoplayRegistryId && currentRound !== lastAutoplayRound && Date.now() < Number(game.closes_at_ms)) {
+    const { object: registryObject } = await client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } });
+    hasActiveAutoplay = (registryObject.json?.plans ?? []).some((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n);
+  }
+  if (hasActiveAutoplay) {
     const autoplayTx = new Transaction();
     autoplayTx.setSender(keypair.toSuiAddress());
-    autoplayTx.setGasBudget(100_000_000);
+    autoplayTx.setGasBudget(20_000_000);
     autoplayTx.moveCall({
       target: `${packageId}::autoplay::execute_random_round`,
       arguments: [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(randomId), autoplayTx.object(clockId)],
@@ -55,7 +60,7 @@ async function tick() {
 
   const tx = new Transaction();
   tx.setSender(keypair.toSuiAddress());
-  tx.setGasBudget(50_000_000);
+  tx.setGasBudget(20_000_000);
   tx.moveCall({
     target: `${packageId}::game::settle_and_open_next`,
     arguments: [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],

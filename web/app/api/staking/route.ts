@@ -4,7 +4,8 @@ import { SuiGraphQLClient } from "@mysten/sui/graphql";
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
 const vaultId = "0xed814a5a13886244d1dc2a6e136d971cd5f52e27b33d01916c16590fcbbe5adc";
 const dslvrType = `${packageId}::dslvr::DSLVR`;
-const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
+const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
+const client = new SuiGrpcClient({ network: "testnet", baseUrl: rpcUrl });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
 type VaultJson = { total_staked: string; rewards: string; position_count: string; total_rewards_added: string; total_rewards_claimed: string };

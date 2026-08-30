@@ -1,4 +1,4 @@
-const suiTestnetRpc = "https://fullnode.testnet.sui.io:443";
+const suiTestnetRpc = process.env.SUI_JSON_RPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 
 export async function POST(request: Request) {
   try {

@@ -8,16 +8,17 @@ const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae92
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const randomId = "0x8";
 const clockId = "0x6";
-const pollMs = Math.max(3_000, Number(process.env.KEEPER_POLL_MS ?? 5_000));
+const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
+const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 let lastAutoplayRound = -1n;
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
 
-const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
+const client = new SuiGrpcClient({ network: "testnet", baseUrl: rpcUrl });
 const keypair = Ed25519Keypair.fromSecretKey(secret);
-console.log(`[keeper] Testnet keeper ${keypair.toSuiAddress()} started.`);
+console.log(`[keeper] Testnet keeper ${keypair.toSuiAddress()} started (polling every ${pollMs}ms).`);
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

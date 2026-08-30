@@ -157,7 +157,7 @@ export default function Home() {
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refreshChainState(), 0);
-    const timer = window.setInterval(() => void refreshChainState(), 2_000);
+    const timer = window.setInterval(() => void refreshChainState(), 10_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, [refreshChainState]);
 
@@ -212,11 +212,10 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [idleSimulation, chainState?.round]);
 
-  const perRoundTotal = useMemo(() => {
+  const total = useMemo(() => {
     const value = Number(amount);
-    return Number.isFinite(value) ? value * selected.length : 0;
-  }, [amount, selected]);
-  const total = perRoundTotal * rounds;
+    return Number.isFinite(value) ? value * selected.length * rounds : 0;
+  }, [amount, selected, rounds]);
 
   function toggleTile(tile: number) {
     const next = selected.includes(tile) ? selected.filter((item) => item !== tile) : [...selected, tile];
@@ -861,13 +860,15 @@ export default function Home() {
         <button type="button" onClick={() => setBugReportOpen((open) => !open)}>Report a bug</button>
       </aside>
       {bugReportOpen && <section className="bug-report-panel" aria-label="Bug report diagnostics"><div><strong>DIAGNOSTIC REPORT</strong><span>Copy this report and paste it in Discord with a screenshot. It never includes wallet keys.</span></div><pre>{bugReport}</pre><footer><button type="button" onClick={copyBugReport}>{bugReportCopied ? "Copied" : "Copy report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></footer></section>}
-      {false && <section className="round-strip" aria-label="Current round">
+      {chainState?.keeperLow && <aside className="keeper-alert" role="alert"><strong>AUTOPLAY PAUSED</strong><span>The Testnet automation wallet is low on gas. Existing autoplay funds remain safe while service is restored.</span></aside>}
+
+      <section className="round-strip" aria-label="Current round">
         <div><small>ROUND</small><strong>{chainLoading ? "—" : `#${String(chainState?.round ?? 0).padStart(6, "0")}`}</strong></div><div><small>TIME LEFT</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></div>
         <div><small>DEPLOYED</small><strong className="deployed-total"><i className="round-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{chainLoading ? "—" : (chainState?.potSui ?? 0).toFixed(4)}</strong></div>
-        <div><small><span className="dslvr-word">DSLVR</span> ROUND REWARD</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" />{motherlodeRoundContribution.toFixed(2)}</strong></div>
-      </section>}
+        <div><small><span className="dslvr-word">DSLVR</span> MOTHERLODE</small><strong className="meteor-shower-total"><img className="round-slvr-core" src="/brand/dslvr-coin.png" alt="DSLVR" />{(chainState?.motherlodeDslvr ?? 0).toFixed(2)}</strong></div>
+      </section>
 
-      {false && <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
+      <section className={lastRoundOpen ? "last-round open" : "last-round"} aria-label="Last settled round">
         <button className="last-round-toggle" type="button" aria-expanded={lastRoundOpen} onClick={() => setLastRoundOpen((open) => !open)}>
           <span><small>LAST ROUND</small><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")}` : "Waiting for settlement"}</strong></span>
           {chainState?.lastRound && <span className="last-round-summary"><b>BLOCK {chainState.lastRound.winningTile}</b><i aria-hidden="true">{lastRoundOpen ? "x" : "+"}</i></span>}
@@ -879,11 +880,11 @@ export default function Home() {
           <div><small>DSLVR AWARDED</small><strong>{chainState.lastRound.mtbxAwarded.toFixed(2)} DSLVR</strong></div>
           {chainState.lastRound.transaction && <a href={`https://testnet.suivision.xyz/txblock/${chainState.lastRound.transaction}`} target="_blank" rel="noreferrer">View settlement</a>}
         </> : <p>The first completed round will appear here automatically.</p>}</div>}
-      </section>}
+      </section>
 
       {view === "mine" ? <div className="workspace">
         <section className="mine-panel">
-          <div className="section-heading"><div><p>LIVE GRID &middot; {idleSimulation ? "IDLE" : "TESTNET"}</p><h1>Select blocks</h1></div>
+          <div className="section-heading"><div><p>LIVE GRID &middot; {idleSimulation ? "IDLE SIMULATION" : "TESTNET"}</p><h1>Choose your impact zone.</h1>{idleSimulation && <span className="simulation-note">Visual demo only &middot; no SUI, rewards, or simulated players</span>}</div>
             <button className="text-button" onClick={toggleAllTiles}>{selected.length === 25 ? "Clear" : "Select all"}</button>
           </div>
           <div className="grid" aria-label="Mining grid">
@@ -901,22 +902,18 @@ export default function Home() {
           </div>
         </section>
 
-        <aside className="entry-panel compact-entry-panel">
-          <div className="compact-round-stats">
-            <span><small>DEPLOYED</small><strong className="compact-stat-value"><i className="round-sui-icon" aria-label="SUI"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z"/></svg></i>{(chainState?.potSui ?? 0).toFixed(3)}</strong></span>
-            <span><small>MOTHERLOAD</small><strong className="compact-stat-value"><img className="compact-dslvr-icon" src="/brand/dslvr-coin.png" alt="DSLVR" />{(chainState?.motherlodeDslvr ?? 0).toFixed(2)}</strong></span>
-            <span><small>TIME</small><strong>{chainState?.settled ? "SETTLED" : `${seconds}s`}</strong></span>
-          </div>
-          <button className="compact-last-round" type="button" onClick={() => setLastRoundOpen((open) => !open)}><span>LAST ROUND</span><strong>{chainState?.lastRound ? `#${String(chainState.lastRound.round).padStart(6, "0")} · BLOCK ${chainState.lastRound.winningTile}` : "WAITING"}</strong></button>
-          {lastRoundOpen && chainState?.lastRound && <div className="compact-last-details"><span>{chainState.lastRound.deployedSui.toFixed(4)} SUI deployed</span><span>{chainState.lastRound.rewardPoolSui.toFixed(4)} SUI rewards</span></div>}
-          <label htmlFor="amount">Amount per block</label>
+        <aside className="entry-panel">
+          <p className="eyebrow">MANUAL ENTRY</p><h2>Deploy SUI</h2><label htmlFor="amount">Amount per block</label>
           <div className="amount-input"><input id="amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /><span>SUI</span></div>
-          <div className="quick-values compact-quick-values"><button onClick={() => setAmount("0.01")}>+0.01</button><button onClick={() => setAmount("0.1")}>+0.1</button><button onClick={() => setAmount("1")}>+1</button></div>
-          <div className="compact-step-row"><label htmlFor="tile-count">Tiles</label><div className="rounds-stepper"><button aria-label="Remove one tile" onClick={() => selectTileCount(selected.length - 1)}>&minus;</button><input id="tile-count" aria-label="Tiles" type="text" pattern="[0-9]*" maxLength={2} inputMode="numeric" value={tileCountInput} onFocus={(event) => event.currentTarget.select()} onChange={(event) => changeTileCount(event.target.value)} onBlur={() => { if (tileCountInput === "") setTileCountInput(String(selected.length)); }} /><button aria-label="Add one tile" onClick={() => selectTileCount(selected.length + 1)}>+</button></div></div>
-          <div className="compact-step-row"><label htmlFor="round-count">Rounds</label><div className="rounds-stepper"><button aria-label="Remove one round" onClick={() => setRounds((current) => Math.max(1, current - 1))}>&minus;</button><input id="round-count" aria-label="Rounds" type="text" pattern="[0-9]*" maxLength={3} inputMode="numeric" value={rounds} onFocus={(event) => event.currentTarget.select()} onChange={(event) => { const digits = event.target.value.replace(/\D/g, ""); if (digits) setRounds(Math.max(1, Math.min(999, Number(digits)))); }} /><button aria-label="Add one round" onClick={() => setRounds((current) => Math.min(999, current + 1))}>+</button></div></div>
-          <dl className="compact-summary"><div><dt>Per round</dt><dd className="compact-per-round"><i className="round-sui-icon" aria-label="SUI"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z"/></svg></i>{perRoundTotal.toFixed(4)}</dd></div></dl>
+          <div className="quick-values">{["0.001", "0.01", "0.1"].map((value) => <button key={value} onClick={() => setAmount(value)}>{value}</button>)}</div>
+          <div className="rounds-control tile-count-control"><div className="rounds-label"><label htmlFor="tile-count">Tiles</label><small>Auto-select grid quantity</small></div><div className="rounds-stepper"><button aria-label="Remove one tile" onClick={() => selectTileCount(selected.length - 1)}>&minus;</button><input id="tile-count" aria-label="Tiles" type="text" pattern="[0-9]*" maxLength={2} inputMode="numeric" value={tileCountInput} onFocus={(event) => event.currentTarget.select()} onChange={(event) => changeTileCount(event.target.value)} onBlur={() => { if (tileCountInput === "") setTileCountInput(String(selected.length)); }} /><button aria-label="Add one tile" onClick={() => selectTileCount(selected.length + 1)}>+</button></div></div>
+          <div className="round-presets tile-presets"><button onClick={() => selectTileCount(1)}>1</button><button onClick={() => selectTileCount(5)}>5</button><button onClick={() => selectTileCount(10)}>10</button><button onClick={() => selectTileCount(25)}>25</button></div>
+          <div className="rounds-control"><div className="rounds-label"><label htmlFor="rounds">Rounds</label><small>Repeat selected tiles</small></div><div className="rounds-stepper"><button aria-label="Remove one round" onClick={() => setRounds((value) => Math.max(1, value - 1))}>&minus;</button><input id="rounds" type="number" min="1" inputMode="numeric" value={rounds} onChange={(event) => setRounds(Math.max(1, Math.floor(Number(event.target.value) || 1)))} /><button aria-label="Add one round" onClick={() => setRounds((value) => value + 1)}>+</button></div></div>
+          <div className="round-presets"><button onClick={() => setRounds(1)}>1</button><button onClick={() => setRounds(10)}>10</button><button onClick={() => setRounds(25)}>25</button><button onClick={() => setRounds((value) => value + 100)}>+100</button></div>
+          <dl className="summary"><div><dt>Selected tiles</dt><dd>{selected.length}</dd></div><div><dt>Rounds</dt><dd>{rounds}</dd></div><div><dt>Per round</dt><dd>{(Number(amount) * selected.length || 0).toFixed(4)} SUI</dd></div><div><dt>Total deployment</dt><dd>{total.toFixed(4)} SUI</dd></div><div><dt>Motherlode</dt><dd>1 in 500 · +{motherlodeRoundContribution.toFixed(1)} DSLVR/round</dd></div><div><dt>Autoplay blocks</dt><dd>{chainState?.autoplayPlans.flatMap((plan) => plan.tiles).join(", ") || "None"}</dd></div><div><dt>Autoplay amount</dt><dd>{chainState?.autoplayPlans.length ? chainState.autoplayPlans.map((plan) => `${plan.amountPerTileSui.toFixed(3)} SUI`).join(" / ") : "None"}</dd></div><div><dt>Autoplay left</dt><dd>{(chainState?.autoplayPlans ?? []).reduce((sum, plan) => sum + plan.roundsRemaining, 0)} rounds</dd></div><div><dt>Autoplay funded</dt><dd>{(chainState?.autoplayPlans ?? []).reduce((sum, plan) => sum + plan.fundedSui, 0).toFixed(4)} SUI</dd></div></dl>
           <button className="deploy" disabled={submittingPlay || !chainState || chainState.settled || seconds === 0} onClick={deploy}>{submittingPlay ? "Waiting for Slush…" : !chainState?.rewardsBound ? "Owner activation required" : chainState.settled ? "Round is settled" : seconds === 0 ? "Waiting for settlement" : "Deploy to live grid"}</button>{notice && <p className="notice" role="status">{notice}</p>}
           <button className="rewards-link" onClick={() => setView("rewards")}><span><small>YOUR ON-CHAIN REWARDS</small><strong><span><img className="reward-dslvr-icon" src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{((chainState?.unrefinedMtbx ?? 0) + (chainState?.refinedMtbx ?? 0) + (chainState?.estimatedMtbxWinnings ?? 0)).toFixed(6)} DSLVR</span><span><i className="reward-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z" /></svg></i>{(chainState?.walletSui ?? 0).toFixed(6)} SUI in wallet</span></strong></span><b>View &amp; claim &rarr;</b></button>
+          <p className="disclaimer">Sui Testnet only. A confirmed play uses test SUI and writes your selected tiles on-chain.</p>
         </aside>
       </div> : view === "rewards" ? <section className="rewards-page">
         <div className="rewards-title"><p className="eyebrow">LIVE SUI TESTNET REWARDS</p><h1>Your SUI and DSLVR winnings.</h1><p>Balances below are read from the published Game and Refinery objects. A winning claim sends SUI immediately and starts the DSLVR refining period.</p></div>
@@ -926,7 +923,7 @@ export default function Home() {
         </div>
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Close empty round</h2><p>Advance an expired round that received no entries.</p><button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button></article>}
+        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>DSLVR Motherlode live</h2><p>The live Testnet game now adds 0.2 DSLVR per occupied round with a 1-in-500 winning-block Motherlode.</p>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled>Motherlode upgrade live</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}
@@ -989,4 +986,3 @@ export default function Home() {
     </main>
   );
 }
-

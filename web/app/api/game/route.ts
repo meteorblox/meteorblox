@@ -10,7 +10,8 @@ const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 const keeperAddress = "0xf03dfdd7c9f36d3ceed427538f3b717e79c22119df99171cb04e7013216cb960";
 const keeperLowBalanceMist = 250_000_000n;
-const client = new SuiGrpcClient({ network: "testnet", baseUrl: "https://fullnode.testnet.sui.io:443" });
+const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
+const client = new SuiGrpcClient({ network: "testnet", baseUrl: rpcUrl });
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
 
 type GameEntry = { player: string; round: string; tile: number; stake: string; claimed: boolean };

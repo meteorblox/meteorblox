@@ -3,3 +3,4 @@
 @media(max-width:430px){.connect-card{padding:32px 20px 24px}.connect-copy{font-size:12px}.connect-orbit{margin-bottom:14px}}
 .google-connect:disabled{opacity:.55;cursor:not-allowed}.wallet-choice{margin-top:8px}.wallet-install{text-decoration:none}.wallet:has(+*){white-space:nowrap}
 .nightly-choice{border-color:#5367a8;background:linear-gradient(90deg,#111827,#151d35)}
+.suiet-choice{border-color:#365f77;background:linear-gradient(90deg,#0f1a22,#102531)}

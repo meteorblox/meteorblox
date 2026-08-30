@@ -11,7 +11,7 @@ import { rehearsalDslvrPublishData } from "./rehearsal-dslvr-publish-data";
 import { rehearsalSalePublishData } from "./rehearsal-sale-publish-data";
 import { walletPreferenceKey } from "./providers";
 
-// The current Testnet upgrade adds the accumulating 1-in-500 DSLVR Motherlode.
+// This Testnet upgrade prepares player-triggered recovery for expired empty rounds.
 
 const tiles = Array.from({ length: 25 }, (_, index) => index + 1);
 const motherlodeRoundContribution = 0.2;
@@ -401,10 +401,10 @@ export default function Home() {
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
     setUpgradingPackage(true);
-    setNotice("Waiting for the owner wallet to approve the DSLVR Motherlode Testnet upgrade...");
+    setNotice("Waiting for the owner wallet to approve the idle-round Testnet upgrade...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) setNotice(`SLVRBLOX Motherlode Testnet upgrade completed. Transaction: ${result.digest}`);
+      if (result) setNotice(`SLVRBLOX idle-round Testnet upgrade completed. Transaction: ${result.digest}`);
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
@@ -923,7 +923,7 @@ export default function Home() {
         </div>
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
-        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>DSLVR Motherlode live</h2><p>The live Testnet game now adds 0.2 DSLVR per occupied round with a 1-in-500 winning-block Motherlode.</p>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled>Motherlode upgrade live</button>}{currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.settled && seconds === 0 && chainState?.potSui === 0 && <button className="deploy" disabled={roundAction} onClick={closeEmptyRound}>{roundAction ? "Waiting for wallet approval..." : "Close current empty round"}</button>}</article>
+        <article className="claim-card testnet-publish"><small>OWNER TESTNET DEPLOYMENT</small><h2>Idle-round upgrade ready</h2><p>This upgrade lets the next player restart an expired empty round, so the keeper no longer spends Testnet SUI cycling rounds with no players.</p>{currentAccount?.address.toLowerCase() === testnetOwner && <button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for Slush approval..." : "Upgrade idle-round system"}</button>}</article>
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}

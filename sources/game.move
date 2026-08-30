@@ -174,6 +174,25 @@ public fun place(
     place_for(game, tile, coin::into_balance(payment), tx_context::sender(ctx), clock);
 }
 
+/// Makes an idle game playable without requiring the keeper to pay for empty
+/// rounds. Every player transaction may call this before placing entries. If
+/// the current round is still live it is a no-op; if it expired without any
+/// deployments, exactly one serialized transaction advances it. A round with
+/// player funds can never be advanced through this path.
+public fun prepare_round_for_entry(game: &mut Game, clock: &Clock) {
+    assert!(!game.settled, E_ROUND_CLOSED);
+    if (clock.timestamp_ms() >= game.closes_at_ms) {
+        assert!(balance::value(&game.pot) == 0, E_ROUND_NOT_EMPTY);
+        let mut i = 0;
+        while (i < game.entries.length()) {
+            assert!(game.entries.borrow(i).round != game.round, E_ROUND_NOT_EMPTY);
+            i = i + 1;
+        };
+        event::emit(EmptyRoundClosed { round: game.round });
+        reset_and_open(game, clock);
+    };
+}
+
 /// Package-only entry path used by the funded autoplay registry. The player
 /// remains the plan owner even though a permissionless keeper executes it.
 public(package) fun place_for(

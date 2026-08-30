@@ -104,7 +104,8 @@ export default function Home() {
   const wallets = useWallets();
   const connecting = walletConnection.isConnecting;
   const slushWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("slush"));
-  const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("phantom"));
+  const nightlyWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("nightly"));
+  const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("nightly") && !wallet.name.toLowerCase().includes("phantom"));
 
   async function connectWallet(wallet: (typeof wallets)[number]) {
     try {
@@ -908,7 +909,7 @@ export default function Home() {
           <div className="round-presets"><button onClick={() => setRounds(1)}>1</button><button onClick={() => setRounds(10)}>10</button><button onClick={() => setRounds(25)}>25</button><button onClick={() => setRounds((value) => value + 100)}>+100</button></div>
           <dl className="summary"><div><dt>Selected tiles</dt><dd>{selected.length}</dd></div><div><dt>Rounds</dt><dd>{rounds}</dd></div><div><dt>Per round</dt><dd>{(Number(amount) * selected.length || 0).toFixed(4)} SUI</dd></div><div><dt>Total deployment</dt><dd>{total.toFixed(4)} SUI</dd></div></dl>
           {(chainState?.autoplayPlans.length ?? 0) > 0 && <section className="autoplay-status" aria-live="polite"><span><small>AUTOPLAY ACTIVE</small><strong>{chainState!.autoplayPlans.reduce((sum, plan) => sum + plan.roundsRemaining, 0)} rounds left</strong></span><span>{chainState!.autoplayPlans.length} active {chainState!.autoplayPlans.length === 1 ? "plan" : "plans"}</span></section>}
-          <button className="deploy" disabled={submittingPlay || !chainState || chainState.settled || (seconds === 0 && (chainState?.potSui ?? 0) > 0)} onClick={deploy}>{submittingPlay ? "Waiting for Slush…" : !chainState?.rewardsBound ? "Owner activation required" : chainState.settled ? "Round is settled" : seconds === 0 ? "Start next round & deploy" : "Deploy to live grid"}</button>{notice && <p className="notice" role="status">{notice}</p>}
+          <button className="deploy" disabled={submittingPlay || !chainState || chainState.settled || (seconds === 0 && (chainState?.potSui ?? 0) > 0)} onClick={deploy}>{submittingPlay ? "Waiting for wallet approval…" : !chainState?.rewardsBound ? "Owner activation required" : chainState.settled ? "Round is settled" : seconds === 0 ? "Start next round & deploy" : "Deploy to live grid"}</button>{notice && <p className="notice" role="status">{notice}</p>}
           <button className="rewards-link" onClick={() => setView("rewards")}><span><small>YOUR ON-CHAIN REWARDS</small><strong><span><img className="reward-dslvr-icon" src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{((chainState?.unrefinedMtbx ?? 0) + (chainState?.refinedMtbx ?? 0) + (chainState?.estimatedMtbxWinnings ?? 0)).toFixed(6)} DSLVR</span><span><i className="reward-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z" /></svg></i>{(chainState?.walletSui ?? 0).toFixed(6)} SUI in wallet</span></strong></span><b>View &amp; claim &rarr;</b></button>
           <p className="disclaimer">Sui Testnet only. A confirmed play uses test SUI and writes your selected tiles on-chain.</p>
         </aside>
@@ -963,11 +964,12 @@ export default function Home() {
 
       {connectOpen && <div className="connect-backdrop" role="presentation" onMouseDown={() => setConnectOpen(false)}><section className="connect-card" role="dialog" aria-modal="true" aria-labelledby="connect-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="connect-close" aria-label="Close sign in" onClick={() => setConnectOpen(false)}>×</button><span className="connect-orbit" aria-hidden="true"><i /></span>
-        <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Use Google through Slush for a simple Sui wallet experience, or connect another Sui wallet.</p>
+        <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Slush is the recommended Sui wallet. Nightly is our recommended multichain alternative.</p>
         <button className="google-connect" disabled={!slushWallet || connecting} onClick={() => slushWallet && connectWallet(slushWallet)}><span className="google-mark">G</span><b>{connecting ? "Connecting…" : "Continue with Google via Slush"}</b></button>
         <div className="connect-divider"><span>or</span></div>
+        {nightlyWallet ? <button className="sui-connect wallet-choice nightly-choice" onClick={() => connectWallet(nightlyWallet)}>{nightlyWallet.icon ? <img className="wallet-choice-icon" src={nightlyWallet.icon} alt="" /> : <span className="sui-wallet-mark">N</span>}<b>Connect Nightly</b></button> : <a className="sui-connect wallet-choice wallet-install nightly-choice" href="https://nightly.app" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">N</span><b>Get Nightly wallet ↗</b></a>}
         {standardWallets.map((wallet) => <button className="sui-connect wallet-choice" key={wallet.name} onClick={() => connectWallet(wallet)}>{wallet.icon ? <img className="wallet-choice-icon" src={wallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect {wallet.name}</b></button>)}
-        <div className="onboarding-note"><strong>SUI TESTNET</strong><span>Slush provides Google zkLogin and a self-custodial Sui address with no Enoki subscription. Mining remains simulated until the Move contracts are deployed.</span></div>
+        <div className="onboarding-note"><strong>SUI TESTNET</strong><span>Slush and Nightly are self-custodial. Testnet tokens have no monetary value; other compatible Sui wallets remain supported.</span></div>
       </section></div>}
 
       {accountOpen && currentAccount && <div className="account-backdrop" role="presentation" onMouseDown={() => setAccountOpen(false)}><aside className="account-drawer" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={(event) => event.stopPropagation()}>

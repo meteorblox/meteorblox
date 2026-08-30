@@ -11,7 +11,7 @@ export const dAppKit = createDAppKit({
   defaultNetwork: "testnet",
   createClient: (network) => new SuiGrpcClient({ network, baseUrl: grpcUrls[network] }),
   autoConnect: true,
-  slushWalletConfig: { name: "MeteorBlox" },
+  slushWalletConfig: { name: "SLVRBLOX" },
 });
 
 declare module "@mysten/dapp-kit-react" {

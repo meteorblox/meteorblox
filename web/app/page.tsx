@@ -900,7 +900,7 @@ export default function Home() {
 
       <aside className="beta-banner" aria-label="Testnet beta notice">
         <strong>TESTNET BETA</strong>
-        <span>Test tokens have no monetary value. Bugs and resets may occur.</span>
+        <span>Test tokens have no monetary value. Bugs and resets may occur.<b className="tester-airdrop">AIRDROP · Active Testnet participants may qualify for a future DSLVR airdrop.</b></span>
         <button type="button" onClick={() => setBugReportOpen((open) => !open)}>Report a bug</button>
       </aside>
       {bugReportOpen && <section className="bug-report-panel" aria-label="Bug report diagnostics"><div><strong>DIAGNOSTIC REPORT</strong><span>Copy this report and paste it in Discord with a screenshot. It never includes wallet keys.</span></div><pre>{bugReport}</pre><footer><button type="button" onClick={copyBugReport}>{bugReportCopied ? "Copied" : "Copy report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></footer></section>}

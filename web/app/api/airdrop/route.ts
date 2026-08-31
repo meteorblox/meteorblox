@@ -52,7 +52,8 @@ async function loadEntryIndex() {
 }
 
 async function loadCheckpointDays(checkpoints: string[]) {
-  const missing = checkpoints.filter((checkpoint) => !checkpointDayCache.has(checkpoint));
+  const unique = [...new Set(checkpoints)];
+  const missing = unique.filter((checkpoint) => !checkpointDayCache.has(checkpoint));
   for (let offset = 0; offset < missing.length; offset += 40) {
     const batch = missing.slice(offset, offset + 40);
     const fields = batch.map((checkpoint, index) => `c${index}: checkpoint(sequenceNumber: ${checkpoint}) { timestamp }`).join("\n");
@@ -70,40 +71,55 @@ async function loadCheckpointDays(checkpoints: string[]) {
       if (timestamp) checkpointDayCache.set(checkpoint, timestamp.slice(0, 10));
     });
   }
-  return new Set(checkpoints.map((checkpoint) => checkpointDayCache.get(checkpoint)).filter((day): day is string => Boolean(day)));
+}
+
+function settledEntries(entries: IndexedEntry[], game: GameJson) {
+  const currentRound = Number(game.round);
+  return entries.filter((entry) => entry.round < currentRound || (entry.round === currentRound && game.settled));
+}
+
+function summarize(player: string, entries: IndexedEntry[]) {
+  const roundCheckpoints = new Map<number, string>();
+  for (const entry of entries) if (entry.player === player && !roundCheckpoints.has(entry.round)) roundCheckpoints.set(entry.round, entry.checkpoint);
+  const days = new Set([...roundCheckpoints.values()].map((checkpoint) => checkpointDayCache.get(checkpoint)).filter((day): day is string => Boolean(day))).size;
+  const rounds = roundCheckpoints.size;
+  const achievedIndex = levels.findLastIndex((level) => rounds >= level.rounds && days >= level.days);
+  const achieved = achievedIndex >= 0 ? levels[achievedIndex] : null;
+  const next = levels.find((level) => rounds < level.rounds || days < level.days) ?? null;
+  return { address: player, qualifyingRounds: rounds, activeDays: days, currentLevel: achieved?.name ?? "TESTNET PROSPECTOR", levelRank: achievedIndex + 1, nextLevel: next };
 }
 
 export async function GET(request: Request) {
   try {
-    const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    if (!/^0x[a-f0-9]{64}$/.test(address)) return Response.json({ error: "Valid Sui wallet address required" }, { status: 400 });
+    const url = new URL(request.url);
+    const address = url.searchParams.get("address")?.toLowerCase() ?? "";
+    const leaderboardRequested = url.searchParams.get("leaderboard") === "1";
+    if (!leaderboardRequested && !/^0x[a-f0-9]{64}$/.test(address)) return Response.json({ error: "Valid Sui wallet address required" }, { status: 400 });
 
     const [{ object }, entries] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       loadEntryIndex(),
     ]);
-    const game = object.json as GameJson;
-    const currentRound = Number(game.round);
-    const roundCheckpoints = new Map<number, string>();
-    for (const entry of entries) {
-      if (entry.player !== address) continue;
-      if (entry.round > currentRound || (entry.round === currentRound && !game.settled)) continue;
-      if (!roundCheckpoints.has(entry.round)) roundCheckpoints.set(entry.round, entry.checkpoint);
+    const settled = settledEntries(entries, object.json as GameJson);
+    await loadCheckpointDays(settled.map((entry) => entry.checkpoint));
+
+    if (leaderboardRequested) {
+      const players = [...new Set(settled.map((entry) => entry.player))];
+      const testers = players.map((player) => summarize(player, settled))
+        .sort((a, b) => b.levelRank - a.levelRank || b.activeDays - a.activeDays || b.qualifyingRounds - a.qualifyingRounds || a.address.localeCompare(b.address))
+        .slice(0, 25)
+        .map(({ levelRank: _levelRank, nextLevel: _nextLevel, ...tester }, index) => ({ rank: index + 1, ...tester }));
+      return Response.json({ testers, totalTesters: players.length, methodology: "Ranked by achieved level, active UTC days, then unique settled rounds.", updatedAt: new Date().toISOString() }, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
     }
 
-    const activeDays = await loadCheckpointDays([...roundCheckpoints.values()]);
-    const rounds = roundCheckpoints.size;
-    const days = activeDays.size;
-    const achieved = levels.filter((level) => rounds >= level.rounds && days >= level.days).at(-1) ?? null;
-    const next = levels.find((level) => rounds < level.rounds || days < level.days) ?? null;
-    const progress = next ? Math.min(100, Math.floor(Math.min(rounds / next.rounds, days / next.days) * 100)) : 100;
-
+    const summary = summarize(address, settled);
+    const progress = summary.nextLevel ? Math.min(100, Math.floor(Math.min(summary.qualifyingRounds / summary.nextLevel.rounds, summary.activeDays / summary.nextLevel.days) * 100)) : 100;
     return Response.json({
       address,
-      qualifyingRounds: rounds,
-      activeDays: days,
-      currentLevel: achieved?.name ?? "TESTNET PROSPECTOR",
-      nextLevel: next,
+      qualifyingRounds: summary.qualifyingRounds,
+      activeDays: summary.activeDays,
+      currentLevel: summary.currentLevel,
+      nextLevel: summary.nextLevel,
       progress,
       levels,
       methodology: "Unique settled EntryPlaced rounds and UTC activity days reconstructed from Sui Testnet events.",

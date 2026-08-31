@@ -96,6 +96,7 @@ export default function Home() {
   const [creatingAutoplayRegistry, setCreatingAutoplayRegistry] = useState(false);
   const [creatingStakingVault, setCreatingStakingVault] = useState(false);
   const [submittingStake, setSubmittingStake] = useState(false);
+  const [slushMobileUrl, setSlushMobileUrl] = useState("");
   const [nightlyMobileUrl, setNightlyMobileUrl] = useState("");
   const [stakingState, setStakingState] = useState({ availableDslvr: 0, userStakedDslvr: 0, totalStakedDslvr: 0, rewardBalanceDslvr: 0, positionCount: 0 });
   const currentAccount = useCurrentAccount();
@@ -111,8 +112,12 @@ export default function Home() {
   const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("nightly") && !wallet.name.toLowerCase().includes("suiet") && !wallet.name.toLowerCase().includes("phantom"));
 
   useEffect(() => {
-    if (!/Android/i.test(window.navigator.userAgent)) return;
+    const userAgent = window.navigator.userAgent;
     const currentUrl = `${window.location.origin}${window.location.pathname}`;
+    if (/Android|iPhone|iPad|iPod/i.test(userAgent) && !/Slush/i.test(userAgent)) {
+      setSlushMobileUrl(`slush://browse/${currentUrl}`);
+    }
+    if (!/Android/i.test(userAgent)) return;
     setNightlyMobileUrl(`https://nightly.app/v1?network=sui&cluster=testnet&url=${encodeURIComponent(currentUrl)}`);
   }, []);
 
@@ -325,7 +330,7 @@ export default function Home() {
 
   async function executeWithSlush(transaction: Transaction) {
     if (!currentAccount) { setConnectOpen(true); return null; }
-    const result = await dAppKit.signAndExecuteTransaction({ transaction });
+    const result = await dAppKit.signAndExecuteTransaction({ transaction, network: "testnet" });
     if ("FailedTransaction" in result && result.FailedTransaction) {
       throw new Error(result.FailedTransaction.status.error?.message ?? "Transaction failed on Sui Testnet.");
     }
@@ -1005,12 +1010,13 @@ export default function Home() {
       {connectOpen && <div className="connect-backdrop" role="presentation" onMouseDown={() => setConnectOpen(false)}><section className="connect-card" role="dialog" aria-modal="true" aria-labelledby="connect-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="connect-close" aria-label="Close sign in" onClick={() => setConnectOpen(false)}>×</button><span className="connect-orbit" aria-hidden="true"><i /></span>
         <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Choose Slush, Nightly, or Suiet—or connect another compatible Sui wallet.</p>
+        {slushMobileUrl && <a className="sui-connect wallet-choice wallet-install slush-mobile-choice" href={slushMobileUrl}><span className="sui-wallet-mark">S</span><b>Open SLVRBLOX in Slush app ↗</b></a>}
         <button className="google-connect" disabled={!slushWallet || connecting} onClick={() => slushWallet && connectWallet(slushWallet)}><span className="google-mark">G</span><b>{connecting ? "Connecting…" : "Continue with Google via Slush"}</b></button>
         <div className="connect-divider"><span>or</span></div>
         {nightlyWallet ? <button className="sui-connect wallet-choice nightly-choice" onClick={() => connectWallet(nightlyWallet)}>{nightlyWallet.icon ? <img className="wallet-choice-icon" src={nightlyWallet.icon} alt="" /> : <span className="sui-wallet-mark">N</span>}<b>Connect Nightly</b></button> : <a className="sui-connect wallet-choice wallet-install nightly-choice" href={nightlyMobileUrl || "https://nightly.app"} target="_blank" rel="noreferrer"><span className="sui-wallet-mark">N</span><b>{nightlyMobileUrl ? "Open SLVRBLOX in Nightly ↗" : "Get Nightly wallet ↗"}</b></a>}
         {suietWallet ? <button className="sui-connect wallet-choice suiet-choice" onClick={() => connectWallet(suietWallet)}>{suietWallet.icon ? <img className="wallet-choice-icon" src={suietWallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect Suiet</b></button> : <a className="sui-connect wallet-choice wallet-install suiet-choice" href="https://suiet.app/install" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">S</span><b>Get Suiet wallet ↗</b></a>}
         {standardWallets.map((wallet) => <button className="sui-connect wallet-choice" key={wallet.name} onClick={() => connectWallet(wallet)}>{wallet.icon ? <img className="wallet-choice-icon" src={wallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect {wallet.name}</b></button>)}
-        <div className="onboarding-note"><strong>SUI TESTNET</strong><span>Slush, Nightly, and Suiet are self-custodial. Testnet tokens have no monetary value; other compatible Sui wallets remain supported.</span></div>
+        <div className="onboarding-note"><strong>SUI TESTNET</strong><span>On mobile, open SLVRBLOX inside the wallet app and select Testnet there before approving. Testnet tokens have no monetary value.</span></div>
       </section></div>}
 
       {accountOpen && currentAccount && <div className="account-backdrop" role="presentation" onMouseDown={() => setAccountOpen(false)}><aside className="account-drawer" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={(event) => event.stopPropagation()}>

@@ -6,6 +6,7 @@ const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae92
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
 const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
 const packageId = "0x4beb56bfd9be58feaa10d815500e982d8b97a1cad23b2c19540c77f89a7a230a";
+const dslvrType = `${originPackageId}::dslvr::DSLVR`;
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 const motherlodeEventPackageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
@@ -37,7 +38,7 @@ const decodeTiles = (value: string | number[]) => Array.isArray(value) ? value :
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, motherlodeEvents, walletBalanceResult, keeperBalanceResult] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, motherlodeEvents, walletBalanceResult, walletDslvrBalanceResult, keeperBalanceResult] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
       eventClient.core.listEvents({ filter: { eventType: `${originPackageId}::game::RoundSettled` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
       eventClient.core.listEvents({ filter: { eventType: `${motherlodeEventPackageId}::game::MotherlodeUpdated` }, limit: 1, order: "descending" }).catch(() => ({ events: [] })),
       address ? client.core.getBalance({ owner: address }).catch(() => null) : Promise.resolve(null),
+      address ? client.core.getBalance({ owner: address, coinType: dslvrType }).catch(() => null) : Promise.resolve(null),
       client.core.getBalance({ owner: keeperAddress }).catch(() => null),
     ]);
     const motherlodeJson = (motherlodeEvents.events[0]?.json ?? null) as MotherlodeUpdatedJson | null;
@@ -109,6 +111,7 @@ export async function GET(request: Request) {
       unrefinedPositions: unrefinedPositions.length,
       ledgerSui: sui(ledgerCreditTotal), ledgerCreditCount: ledgerCredits.length,
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
+      walletDslvr: walletDslvrBalanceResult ? mtbx(BigInt(walletDslvrBalanceResult.balance.balance)) : 0,
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,
       motherlodeDslvr: mtbx(motherlodeBalance),

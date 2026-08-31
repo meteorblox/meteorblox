@@ -17,6 +17,7 @@ import { walletPreferenceKey } from "./providers";
 const tiles = Array.from({ length: 25 }, (_, index) => index + 1);
 const motherlodeRoundContribution = 0.2;
 const testnetOwner = "0x55f035832afb21499461d62630ed4b1cdf6e53b2a43f907e6db55a91eb114781";
+const testnetKeeper = "0xf03dfdd7c9f36d3ceed427538f3b717e79c22119df99171cb04e7013216cb960";
 const testPaymentPackageId = "0x47e492650ee57c7254e0be3d58e5541654e2d1f3e2463fdc2dffb8cb6b81b459";
 const testUsdcTreasuryCapId = "0x2baeb2774591ea31ab5ffecb9be4373c877cc18d6ee6f462ac576146453c064b";
 const rehearsalTokenPackageId = "0xffb4f52b5214c79d30cb79a30c2592439e0624329be3b4f43e2013052962092c";
@@ -270,6 +271,11 @@ export default function Home() {
     if (!currentAccount) return;
     await navigator.clipboard.writeText(currentAccount.address);
     setNotice("Wallet address copied.");
+  }
+
+  async function copyKeeperAddress() {
+    await navigator.clipboard.writeText(testnetKeeper);
+    setNotice("Testnet keeper address copied.");
   }
 
   function openAccountDrawer() {
@@ -1050,7 +1056,7 @@ export default function Home() {
         <div className="account-avatar" aria-hidden="true"><span>M</span><i /></div>
         <p className="eyebrow">CONNECTED WALLET</p><h2 id="account-title">{username || "SLVRBLOX profile"}</h2>
         <div className="username-editor"><label htmlFor="wallet-username">Username</label><div><input id="wallet-username" value={usernameDraft} maxLength={20} placeholder="Create username" onChange={(event) => setUsernameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") saveUsername(); }} /><button onClick={saveUsername}>Save</button></div><small>3–20 letters, numbers, _ or - · saved on this device</small></div>
-        <dl className="account-details"><div><dt>Address</dt><dd><span>{`${currentAccount.address.slice(0, 8)}...${currentAccount.address.slice(-6)}`}</span><button aria-label="Copy wallet address" onClick={copyAddress}>Copy</button></dd></div><div><dt>Network</dt><dd><span className="account-network"><i /> Sui Testnet</span></dd></div><div><dt>Wallet</dt><dd>{currentWallet?.name ?? "Sui wallet"}</dd></div></dl>
+        <dl className="account-details"><div><dt>Address</dt><dd><span>{`${currentAccount.address.slice(0, 8)}...${currentAccount.address.slice(-6)}`}</span><button aria-label="Copy wallet address" onClick={copyAddress}>Copy</button></dd></div><div><dt>Network</dt><dd><span className="account-network"><i /> Sui Testnet</span></dd></div><div><dt>Wallet</dt><dd>{currentWallet?.name ?? "Sui wallet"}</dd></div><div><dt>Keeper · Testnet</dt><dd><span>{`${testnetKeeper.slice(0, 8)}...${testnetKeeper.slice(-6)}`}</span><button aria-label="Copy Testnet keeper address" onClick={copyKeeperAddress}>Copy</button></dd></div></dl>
         <section className="account-portfolio"><h3>Portfolio</h3><dl><div><dt>SUI deployed</dt><dd>{lifetimeDeployed.toFixed(4)} SUI</dd></div><div><dt>DSLVR refined</dt><dd>On-chain</dd></div><div><dt>DSLVR unrefined</dt><dd>On-chain</dd></div><div className="portfolio-total"><dt>Game access</dt><dd>Live Testnet</dd></div></dl></section>
         <a className="account-explorer" href={`https://suiscan.xyz/testnet/account/${currentAccount.address}`} target="_blank" rel="noreferrer">View wallet on SuiScan ↗</a>
         <button className="account-disconnect" onClick={() => { window.localStorage.removeItem(walletPreferenceKey); void dAppKit.disconnectWallet(); setAccountOpen(false); setNotice("Wallet disconnected."); }}>Disconnect wallet</button>

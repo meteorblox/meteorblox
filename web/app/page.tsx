@@ -342,31 +342,10 @@ export default function Home() {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       if (attempt) await new Promise((resolve) => window.setTimeout(resolve, 1_500));
       try {
-        const response = await fetch("/api/sui", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "suix_queryTransactionBlocks",
-            params: [
-              { filter: { FromAddress: currentAccount.address } },
-              { showEffects: true, showObjectChanges: true },
-              null,
-              10,
-              true,
-            ],
-          }),
-        });
-        const payload = await response.json() as {
-          result?: { data?: Array<{ digest?: string; timestampMs?: string; effects?: { status?: { status?: string } }; objectChanges?: Array<{ objectId?: string }> }> };
-        };
-        const match = payload.result?.data?.find((item) =>
-          Number(item.timestampMs ?? 0) >= startedAtMs - 2_000 &&
-          item.effects?.status?.status === "success" &&
-          item.objectChanges?.some((change) => change.objectId?.toLowerCase() === gameId)
-        );
-        if (match?.digest) return match.digest;
+        const query = new URLSearchParams({ address: currentAccount.address, since: String(startedAtMs) });
+        const response = await fetch(`/api/play-recovery?${query}`, { cache: "no-store" });
+        const payload = await response.json() as { digest?: string | null };
+        if (response.ok && payload.digest) return payload.digest;
       } catch { /* The normal wallet result remains authoritative when recovery is unavailable. */ }
     }
     return null;

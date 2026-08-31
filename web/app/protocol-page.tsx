@@ -6,7 +6,7 @@ type Section = {
   items?: string[];
 };
 
-export function ProtocolPage({ eyebrow, title, intro, sections }: { eyebrow: string; title: string; intro: string; sections: Section[] }) {
+export function ProtocolPage({ eyebrow, title, intro, sections, children }: { eyebrow: string; title: string; intro: string; sections: Section[]; children?: React.ReactNode }) {
   return (
     <main className="protocol-page">
       <header className="protocol-header">
@@ -20,6 +20,7 @@ export function ProtocolPage({ eyebrow, title, intro, sections }: { eyebrow: str
         <p className="protocol-eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p className="protocol-intro">{intro}</p>
+        {children}
         {sections.map((section) => (
           <section key={section.title}>
             <h2>{section.title}</h2>

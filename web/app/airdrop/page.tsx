@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ProtocolPage } from "../protocol-page";
+import { AirdropProgress } from "./airdrop-progress";
 
 export const metadata: Metadata = {
   title: "Testnet Airdrop | SLVRBLOX",
@@ -48,5 +49,7 @@ export default function AirdropPage() {
         ],
       },
     ]}
-  />;
+  >
+    <AirdropProgress />
+  </ProtocolPage>;
 }

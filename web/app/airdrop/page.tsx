@@ -18,6 +18,7 @@ export default function AirdropPage() {
           "BLOX TESTER — Complete at least 25 settled rounds across 5 different days.",
           "ACTIVE MINER — Complete at least 75 settled rounds across 10 different days.",
           "CORE TESTER — Complete at least 200 settled rounds across 20 different days.",
+          "MASTER MINER — Complete at least 1,000 settled rounds across 30 different days.",
           "Verified, actionable bug reports may receive additional consideration regardless of level.",
         ],
       },

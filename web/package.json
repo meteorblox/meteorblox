@@ -19,9 +19,9 @@
     "generate:upgrade": "node scripts/generate-upgrade-data.mjs"
   },
   "dependencies": {
-    "@mysten/dapp-kit-core": "1.6.12",
-    "@mysten/dapp-kit-react": "2.1.14",
-    "@mysten/sui": "^2.24.0",
+    "@mysten/dapp-kit-core": "1.6.20",
+    "@mysten/dapp-kit-react": "2.1.22",
+    "@mysten/sui": "2.27.1",
     "@tanstack/react-query": "^5.101.4",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",

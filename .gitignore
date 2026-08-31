@@ -2,6 +2,9 @@
 /build/
 /.move-cache/
 /.move-home/
+/.move/
+/.tools/
+/web/.npm-cache/
 
 # Local Sui CLI configuration and wallet material
 /.sui-config/

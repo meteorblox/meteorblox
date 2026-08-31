@@ -60,7 +60,7 @@ public fun total_entry(amount_per_tile: u64, tile_count: u64, rounds: u64): u64 
     per_round * rounds
 }
 
-/// Split one round's gross pot according to the immutable 90/7/2/1 model.
+/// Split one round's gross pot according to the immutable 90/5/2/3 model.
 public fun allocate(gross: u64): Allocation {
     let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);
     let treasury = mul_div(gross, TREASURY_BPS, BPS);
@@ -115,6 +115,49 @@ fun test_multi_round_total() {
 #[test]
 fun test_proportional_winner_share() {
     assert!(proportional_share(9_000, 2, 5) == 3_600, 130);
+}
+
+#[test]
+fun test_three_winners_receive_exact_proportional_shares() {
+    let winner_pool = 9_000;
+    let first = proportional_share(winner_pool, 1, 10);
+    let second = proportional_share(winner_pool, 2, 10);
+    let third = proportional_share(winner_pool, 7, 10);
+
+    assert!(first == 900, 131);
+    assert!(second == 1_800, 132);
+    assert!(third == 6_300, 133);
+    assert!(first + second + third == winner_pool, 134);
+}
+
+#[test]
+fun test_last_claimant_receives_division_remainder() {
+    let winner_pool = 10;
+    let first = proportional_share(winner_pool, 1, 3);
+    let second = proportional_share(winner_pool, 1, 3);
+    // Settlement assigns the unclaimed remainder to the deterministic final claimant.
+    let final_claimant = winner_pool - first - second;
+
+    assert!(first == 3, 135);
+    assert!(second == 3, 136);
+    assert!(final_claimant == 4, 137);
+    assert!(first + second + final_claimant == winner_pool, 138);
+}
+
+#[test]
+fun test_multiplayer_full_gross_is_conserved() {
+    let gross = 123_456;
+    let a = allocate(gross);
+    let first = proportional_share(a.winner_pool, 3, 21);
+    let second = proportional_share(a.winner_pool, 7, 21);
+    // The final winner receives all remaining winning-pool dust.
+    let final_claimant = a.winner_pool - first - second;
+
+    assert!(first + second + final_claimant == a.winner_pool, 139);
+    assert!(
+        first + second + final_claimant + a.treasury + a.rewards + a.ops == gross,
+        140,
+    );
 }
 
 #[test]

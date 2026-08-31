@@ -1,4 +1,4 @@
-module meteorblox::mtbx;
+module slvrblox::dslvr;
 
 use std::option;
 use sui::clock::Clock;
@@ -7,7 +7,7 @@ use sui::event;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
 
-/// Six display decimals. All internal amounts are atomic MTBX units.
+/// Six display decimals. All internal amounts are atomic DSLVR units.
 const DECIMALS: u8 = 6;
 const UNIT: u64 = 1_000_000;
 const MAX_SUPPLY: u64 = 25_000_000 * UNIT;
@@ -22,8 +22,8 @@ const E_NOT_MATURE: u64 = 4;
 const E_NO_REWARD: u64 = 5;
 const E_ALREADY_MATURE: u64 = 6;
 
-/// One-time witness defining the wallet-compatible MTBX coin.
-public struct MTBX has drop {}
+/// One-time witness defining the wallet-compatible DSLVR coin.
+public struct DSLVR has drop {}
 
 /// Initially held by the publisher. This is a Testnet checkpoint; the next
 /// integration step moves issuance authority into the round game.
@@ -44,7 +44,7 @@ public struct UnrefinedPosition has store {
 /// claim functions and can never exceed the hard cap.
 public struct Refinery has key {
     id: UID,
-    treasury: TreasuryCap<MTBX>,
+    treasury: TreasuryCap<DSLVR>,
     reward_cap_id: ID,
     awarded: u64,
     minted: u64,
@@ -71,13 +71,13 @@ public struct EarlyClaimed has copy, drop {
 }
 
 #[allow(deprecated_usage)]
-fun init(witness: MTBX, ctx: &mut TxContext) {
+fun init(witness: DSLVR, ctx: &mut TxContext) {
     let (treasury, metadata) = coin::create_currency(
         witness,
         DECIMALS,
-        b"MTBX",
-        b"MeteorBlox",
-        b"Digital rare metal mined through MeteorBlox on Sui.",
+        b"DSLVR",
+        b"Digital SLVR",
+        b"Digital store of value mined through SLVRBLOX on Sui.",
         option::none(),
         ctx,
     );
@@ -97,8 +97,8 @@ fun init(witness: MTBX, ctx: &mut TxContext) {
     transfer::transfer(reward_cap, tx_context::sender(ctx));
 }
 
-/// Award unrefined MTBX without minting transferable coins. Total promises are
-/// capped at 25 million MTBX, so future claims cannot exceed maximum supply.
+/// Award unrefined DSLVR without minting transferable coins. Total promises are
+/// capped by MAX_SUPPLY, so future claims cannot exceed maximum supply.
 /// Only another module in this package can create mined rewards. The game also
 /// has to present the unique RewardCap, which is locked into the shared Game.
 public(package) fun award_from_game(
@@ -152,7 +152,7 @@ public entry fun claim_refined(
     assert!(found, E_NO_REWARD);
 
     refinery.minted = refinery.minted + amount;
-    let payout: Coin<MTBX> = coin::mint(&mut refinery.treasury, amount, ctx);
+    let payout: Coin<DSLVR> = coin::mint(&mut refinery.treasury, amount, ctx);
     transfer::public_transfer(payout, sender);
     event::emit(RefinedClaimed { owner: sender, amount });
 }
@@ -186,7 +186,7 @@ public entry fun claim_early(
     refinery.minted = refinery.minted + received;
     refinery.forfeited = refinery.forfeited + penalty;
 
-    let payout: Coin<MTBX> = coin::mint(&mut refinery.treasury, received, ctx);
+    let payout: Coin<DSLVR> = coin::mint(&mut refinery.treasury, received, ctx);
     transfer::public_transfer(payout, sender);
     event::emit(EarlyClaimed { owner: sender, gross, received, penalty });
 }

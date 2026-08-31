@@ -1,4 +1,4 @@
-module meteorblox::autoplay;
+module slvrblox::autoplay;
 
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
@@ -8,7 +8,7 @@ use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
-use meteorblox::game::{Self, Game};
+use slvrblox::game::{Self, Game};
 
 const TILE_COUNT: u8 = 25;
 const E_NOT_OWNER: u64 = 1;

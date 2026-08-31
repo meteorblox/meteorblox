@@ -1,4 +1,4 @@
-module meteorblox::ledger;
+module slvrblox::ledger;
 
 use std::option::{Self, Option};
 use sui::balance::{Self, Balance};

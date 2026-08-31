@@ -71,7 +71,10 @@ export async function GET(request: Request) {
     const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
     const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
     const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-    const ledgerCredit = address ? ledger?.credits.find((credit) => credit.owner.toLowerCase() === address) : undefined;
+    const ledgerCredits = address ? (ledger?.credits ?? []).filter((credit) =>
+      credit.owner.toLowerCase() === address && BigInt(credit.sui) > 0n
+    ) : [];
+    const ledgerCreditTotal = ledgerCredits.reduce((sum, credit) => sum + BigInt(credit.sui), 0n);
     const autoplayPlans = address ? (registry?.plans ?? []).filter((plan) =>
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({
@@ -104,7 +107,7 @@ export async function GET(request: Request) {
       claimableWinningEntries: userWinningEntries.length, estimatedSuiWinnings: sui(estimatedSui), estimatedMtbxWinnings: mtbx(estimatedMtbx),
       refinedMtbx: mtbx(refined), unrefinedMtbx: mtbx(unrefined), refinedPositions: refinedPositions.length,
       unrefinedPositions: unrefinedPositions.length,
-      ledgerSui: sui(BigInt(ledgerCredit?.sui ?? "0")),
+      ledgerSui: sui(ledgerCreditTotal), ledgerCreditCount: ledgerCredits.length,
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,

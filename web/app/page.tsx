@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useCurrentAccount, useCurrentWallet, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
+import { getWallets, type Wallet } from "@mysten/wallet-standard";
 import { upgradeData } from "./upgrade-data";
 import { dslvrPublishData } from "./dslvr-publish-data";
 import { testUsdcPublishData } from "./test-usdc-publish-data";
@@ -51,7 +52,7 @@ type ChainState = {
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
-  ledgerSui: number; walletSui: number; keeperSui: number; keeperLow: boolean;
+  ledgerSui: number; ledgerCreditCount: number; walletSui: number; keeperSui: number; keeperLow: boolean;
   motherlodeDslvr: number;
   playedTiles: number[];
   autoplayPlans: Array<{ planId: number; roundsRemaining: number; tiles: number[]; tileCount: number; amountPerTileSui: number; fundedSui: number; lastRoundPlayed: number }>;
@@ -95,6 +96,7 @@ export default function Home() {
   const [creatingAutoplayRegistry, setCreatingAutoplayRegistry] = useState(false);
   const [creatingStakingVault, setCreatingStakingVault] = useState(false);
   const [submittingStake, setSubmittingStake] = useState(false);
+  const [nightlyMobileUrl, setNightlyMobileUrl] = useState("");
   const [stakingState, setStakingState] = useState({ availableDslvr: 0, userStakedDslvr: 0, totalStakedDslvr: 0, rewardBalanceDslvr: 0, positionCount: 0 });
   const currentAccount = useCurrentAccount();
   const currentWallet = useCurrentWallet();
@@ -107,6 +109,40 @@ export default function Home() {
   const nightlyWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("nightly"));
   const suietWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("suiet"));
   const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("nightly") && !wallet.name.toLowerCase().includes("suiet") && !wallet.name.toLowerCase().includes("phantom"));
+
+  useEffect(() => {
+    if (!/Android/i.test(window.navigator.userAgent)) return;
+    const currentUrl = `${window.location.origin}${window.location.pathname}`;
+    setNightlyMobileUrl(`https://nightly.app/v1?network=sui&cluster=testnet&url=${encodeURIComponent(currentUrl)}`);
+  }, []);
+
+  useEffect(() => {
+    let unregisterNightly: (() => void) | undefined;
+    let attempts = 0;
+
+    const registerInjectedNightly = () => {
+      attempts += 1;
+      const injected = window as typeof window & {
+        nightly?: { standardWallet?: Wallet; sui?: { standardWallet?: Wallet } };
+      };
+      const standardWallet = injected.nightly?.sui?.standardWallet ?? injected.nightly?.standardWallet;
+      if (!standardWallet) return attempts >= 20;
+
+      const registry = getWallets();
+      const alreadyRegistered = registry.get().some((wallet) => wallet === standardWallet || wallet.name.toLowerCase().includes("nightly"));
+      if (!alreadyRegistered) unregisterNightly = registry.register(standardWallet);
+      return true;
+    };
+
+    if (registerInjectedNightly()) return () => unregisterNightly?.();
+    const timer = window.setInterval(() => {
+      if (registerInjectedNightly()) window.clearInterval(timer);
+    }, 250);
+    return () => {
+      window.clearInterval(timer);
+      unregisterNightly?.();
+    };
+  }, []);
 
   async function connectWallet(wallet: (typeof wallets)[number]) {
     try {
@@ -506,7 +542,10 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(25_000_000);
-    transaction.moveCall({ target: `${continuousPackageId}::ledger::claim_sui`, arguments: [transaction.object(ledgerId)] });
+    const creditCount = Math.max(1, chainState?.ledgerCreditCount ?? 1);
+    for (let i = 0; i < creditCount; i += 1) {
+      transaction.moveCall({ target: `${continuousPackageId}::ledger::claim_sui`, arguments: [transaction.object(ledgerId)] });
+    }
     setRoundAction(true);
     setNotice("Waiting for wallet approval to claim SUI rewards...");
     try {
@@ -968,7 +1007,7 @@ export default function Home() {
         <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Choose Slush, Nightly, or Suiet—or connect another compatible Sui wallet.</p>
         <button className="google-connect" disabled={!slushWallet || connecting} onClick={() => slushWallet && connectWallet(slushWallet)}><span className="google-mark">G</span><b>{connecting ? "Connecting…" : "Continue with Google via Slush"}</b></button>
         <div className="connect-divider"><span>or</span></div>
-        {nightlyWallet ? <button className="sui-connect wallet-choice nightly-choice" onClick={() => connectWallet(nightlyWallet)}>{nightlyWallet.icon ? <img className="wallet-choice-icon" src={nightlyWallet.icon} alt="" /> : <span className="sui-wallet-mark">N</span>}<b>Connect Nightly</b></button> : <a className="sui-connect wallet-choice wallet-install nightly-choice" href="https://nightly.app" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">N</span><b>Get Nightly wallet ↗</b></a>}
+        {nightlyWallet ? <button className="sui-connect wallet-choice nightly-choice" onClick={() => connectWallet(nightlyWallet)}>{nightlyWallet.icon ? <img className="wallet-choice-icon" src={nightlyWallet.icon} alt="" /> : <span className="sui-wallet-mark">N</span>}<b>Connect Nightly</b></button> : <a className="sui-connect wallet-choice wallet-install nightly-choice" href={nightlyMobileUrl || "https://nightly.app"} target="_blank" rel="noreferrer"><span className="sui-wallet-mark">N</span><b>{nightlyMobileUrl ? "Open SLVRBLOX in Nightly ↗" : "Get Nightly wallet ↗"}</b></a>}
         {suietWallet ? <button className="sui-connect wallet-choice suiet-choice" onClick={() => connectWallet(suietWallet)}>{suietWallet.icon ? <img className="wallet-choice-icon" src={suietWallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect Suiet</b></button> : <a className="sui-connect wallet-choice wallet-install suiet-choice" href="https://suiet.app/install" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">S</span><b>Get Suiet wallet ↗</b></a>}
         {standardWallets.map((wallet) => <button className="sui-connect wallet-choice" key={wallet.name} onClick={() => connectWallet(wallet)}>{wallet.icon ? <img className="wallet-choice-icon" src={wallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect {wallet.name}</b></button>)}
         <div className="onboarding-note"><strong>SUI TESTNET</strong><span>Slush, Nightly, and Suiet are self-custodial. Testnet tokens have no monetary value; other compatible Sui wallets remain supported.</span></div>

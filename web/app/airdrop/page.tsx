@@ -48,6 +48,7 @@ export default function AirdropPage() {
           "The proposed airdrop pool is capped at 50,000 DSLVR: 45,000 DSLVR for level-based participation and 5,000 DSLVR reserved for verified, actionable bug reports.",
           "Proposed level weights are BLOX TESTER 1 share, ACTIVE MINER 3 shares, CORE TESTER 8 shares, and MASTER MINER 25 shares. Only the highest verified level counts.",
           "Each eligible wallet's provisional level allocation equals 45,000 DSLVR multiplied by its shares and divided by all eligible shares at the final snapshot.",
+          "Illustrative example only: with 200 Blox Testers, 80 Active Miners, 30 Core Testers, and 10 Master Miners, potential allocations would be approximately 48.39, 145.16, 387.10, and 1,209.68 DSLVR per eligible wallet, respectively.",
           "Final amounts depend on verified participation and may be adjusted to exclude abuse, resolve eligibility, or protect the fixed pool; no specific DSLVR amount or value is guaranteed.",
           "Snapshot timing, claim instructions, and final eligibility results will be announced through official SLVRBLOX channels.",
           "Participation is not a purchase, investment, or guarantee of value, listing, liquidity, or future rewards.",

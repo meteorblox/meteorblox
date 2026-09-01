@@ -31,6 +31,28 @@ type AutoplayRegistryJson = { plans: AutoplayPlanJson[]; next_plan_id: string };
 type RoundSettledJson = { round?: string | number; winning_tile?: string | number; gross?: string; winner_pool?: string };
 type MotherlodeUpdatedJson = { balance?: string | number };
 
+export function rewardAccounting(
+  address: string,
+  refinery: Pick<RefineryJson, "positions">,
+  ledger: LedgerJson | undefined,
+  now: number,
+) {
+  const normalizedAddress = address.toLowerCase();
+  const userPositions = normalizedAddress ? refinery.positions.filter((position) =>
+    position.owner.toLowerCase() === normalizedAddress && !position.claimed
+  ) : [];
+  const refinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) <= now);
+  const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
+  const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
+  const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
+  const ledgerCredits = normalizedAddress ? (ledger?.credits ?? []).filter((credit) =>
+    credit.owner.toLowerCase() === normalizedAddress && BigInt(credit.sui) > 0n
+  ) : [];
+  const ledgerCreditTotal = ledgerCredits.reduce((sum, credit) => sum + BigInt(credit.sui), 0n);
+
+  return { refinedPositions, unrefinedPositions, refined, unrefined, ledgerCredits, ledgerCreditTotal };
+}
+
 const sui = (mist: bigint) => Number(mist) / 1_000_000_000;
 const mtbx = (units: bigint) => Number(units) / 1_000_000;
 const decodeTiles = (value: string | number[]) => Array.isArray(value) ? value : Array.from(Uint8Array.from(atob(value), (character) => character.charCodeAt(0)));
@@ -68,15 +90,8 @@ export async function GET(request: Request) {
     const mtbxPool = BigInt(game.dslvr_reward_initial);
     const estimatedSui = winningTotal > 0n ? winnerPool * userWinningStake / winningTotal : 0n;
     const estimatedMtbx = winningTotal > 0n ? mtbxPool * userWinningStake / winningTotal : 0n;
-    const userPositions = address ? refinery.positions.filter((position) => position.owner.toLowerCase() === address && !position.claimed) : [];
-    const refinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) <= now);
-    const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
-    const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-    const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-    const ledgerCredits = address ? (ledger?.credits ?? []).filter((credit) =>
-      credit.owner.toLowerCase() === address && BigInt(credit.sui) > 0n
-    ) : [];
-    const ledgerCreditTotal = ledgerCredits.reduce((sum, credit) => sum + BigInt(credit.sui), 0n);
+    const { refinedPositions, unrefinedPositions, refined, unrefined, ledgerCredits, ledgerCreditTotal } =
+      rewardAccounting(address, refinery, ledger, now);
     const autoplayPlans = address ? (registry?.plans ?? []).filter((plan) =>
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({

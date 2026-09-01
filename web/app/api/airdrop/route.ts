@@ -5,6 +5,7 @@ const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec
 const entryEventType = `${originPackageId}::game::EntryPlaced`;
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const graphqlUrl = "https://graphql.testnet.sui.io/graphql";
+const dailyQualifyingRoundCap = 50;
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: rpcUrl });
 
 type EntryJson = { player?: string; round?: string | number };
@@ -81,8 +82,13 @@ function settledEntries(entries: IndexedEntry[], game: GameJson) {
 function summarize(player: string, entries: IndexedEntry[]) {
   const roundCheckpoints = new Map<number, string>();
   for (const entry of entries) if (entry.player === player && !roundCheckpoints.has(entry.round)) roundCheckpoints.set(entry.round, entry.checkpoint);
-  const days = new Set([...roundCheckpoints.values()].map((checkpoint) => checkpointDayCache.get(checkpoint)).filter((day): day is string => Boolean(day))).size;
-  const rounds = roundCheckpoints.size;
+  const roundsByDay = new Map<string, number>();
+  for (const checkpoint of roundCheckpoints.values()) {
+    const day = checkpointDayCache.get(checkpoint);
+    if (day) roundsByDay.set(day, (roundsByDay.get(day) ?? 0) + 1);
+  }
+  const days = roundsByDay.size;
+  const rounds = [...roundsByDay.values()].reduce((total, dailyRounds) => total + Math.min(dailyRounds, dailyQualifyingRoundCap), 0);
   const achievedIndex = levels.findLastIndex((level) => rounds >= level.rounds && days >= level.days);
   const achieved = achievedIndex >= 0 ? levels[achievedIndex] : null;
   const next = levels.find((level) => rounds < level.rounds || days < level.days) ?? null;
@@ -109,7 +115,7 @@ export async function GET(request: Request) {
         .sort((a, b) => b.levelRank - a.levelRank || b.activeDays - a.activeDays || b.qualifyingRounds - a.qualifyingRounds || a.address.localeCompare(b.address))
         .slice(0, 25)
         .map(({ levelRank: _levelRank, nextLevel: _nextLevel, ...tester }, index) => ({ rank: index + 1, ...tester }));
-      return Response.json({ testers, totalTesters: players.length, methodology: "Ranked by achieved level, active UTC days, then unique settled rounds.", updatedAt: new Date().toISOString() }, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
+      return Response.json({ testers, totalTesters: players.length, methodology: `Ranked by achieved level, active UTC days, then qualifying settled rounds, capped at ${dailyQualifyingRoundCap} per UTC day. Master Miner remains provisional until final manual-action review.`, updatedAt: new Date().toISOString() }, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
     }
 
     const summary = summarize(address, settled);
@@ -122,7 +128,7 @@ export async function GET(request: Request) {
       nextLevel: summary.nextLevel,
       progress,
       levels,
-      methodology: "Unique settled EntryPlaced rounds and UTC activity days reconstructed from Sui Testnet events.",
+      methodology: `Unique settled wallet EntryPlaced rounds and UTC activity days reconstructed from Sui Testnet events, capped at ${dailyQualifyingRoundCap} qualifying rounds per UTC day. Idle simulation does not create wallet EntryPlaced events. Master Miner remains provisional until final manual-action review.`,
       updatedAt: new Date().toISOString(),
     }, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
   } catch (error) {

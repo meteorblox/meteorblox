@@ -5,7 +5,7 @@ import { rewardAccounting } from "../app/api/game/route.ts";
 
 const wallet = "0xAbC";
 
-test("reward accounting separates refined, unrefined, claimed, and other-wallet positions", () => {
+test("reward accounting separates gradually refined, unrefined, claimed, and other-wallet amounts", () => {
   const now = 2_000;
   const refinery = { positions: [
     { owner: wallet, amount: "250000", awarded_at_ms: "1", matures_at_ms: "1500", claimed: false },
@@ -16,9 +16,9 @@ test("reward accounting separates refined, unrefined, claimed, and other-wallet 
   const ledger = { game: "0xgame", credits: [] };
 
   const result = rewardAccounting(wallet, refinery, ledger, now);
-  assert.equal(result.refined, 250000n);
-  assert.equal(result.unrefined, 500000n);
-  assert.equal(result.refinedPositions.length, 1);
+  assert.equal(result.refined, 649959n);
+  assert.equal(result.unrefined, 100041n);
+  assert.equal(result.refinedPositions.length, 2);
   assert.equal(result.unrefinedPositions.length, 1);
 });
 

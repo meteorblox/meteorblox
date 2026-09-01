@@ -41,10 +41,18 @@ export function rewardAccounting(
   const userPositions = normalizedAddress ? refinery.positions.filter((position) =>
     position.owner.toLowerCase() === normalizedAddress && !position.claimed
   ) : [];
-  const refinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) <= now);
-  const unrefinedPositions = userPositions.filter((position) => Number(position.matures_at_ms) > now);
-  const refined = refinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
-  const unrefined = unrefinedPositions.reduce((sum, position) => sum + BigInt(position.amount), 0n);
+  const portions = userPositions.map((position) => {
+    const amount = BigInt(position.amount);
+    const starts = BigInt(position.awarded_at_ms);
+    const matures = BigInt(position.matures_at_ms);
+    const timestamp = BigInt(now);
+    const refined = timestamp >= matures ? amount : timestamp <= starts ? 0n : amount * (timestamp - starts) / (matures - starts);
+    return { position, refined, unrefined: amount - refined };
+  });
+  const refinedPositions = portions.filter(({ refined }) => refined > 0n);
+  const unrefinedPositions = portions.filter(({ unrefined }) => unrefined > 0n);
+  const refined = refinedPositions.reduce((sum, portion) => sum + portion.refined, 0n);
+  const unrefined = unrefinedPositions.reduce((sum, portion) => sum + portion.unrefined, 0n);
   const ledgerCredits = normalizedAddress ? (ledger?.credits ?? []).filter((credit) =>
     credit.owner.toLowerCase() === normalizedAddress && BigInt(credit.sui) > 0n
   ) : [];
@@ -135,7 +143,7 @@ export async function GET(request: Request) {
       autoplayPlans,
       playedTiles,
       lastRound,
-      nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map((position) => Number(position.matures_at_ms))) : null,
+      nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map(({ position }) => Number(position.matures_at_ms))) : null,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sui Testnet state unavailable";

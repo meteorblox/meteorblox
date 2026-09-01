@@ -5,7 +5,7 @@ const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c25
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
 const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
-const packageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
+const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
 const dslvrType = `${originPackageId}::dslvr::DSLVR`;
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
@@ -73,6 +73,8 @@ export async function GET(request: Request) {
       client.core.getBalance({ owner: keeperAddress }).catch(() => null),
     ]);
     const motherlodeJson = (motherlodeEvents.events[0]?.json ?? null) as MotherlodeUpdatedJson | null;
+    const upgradeCap = (upgradeCapObject as { json?: { package?: string } }).json ?? null;
+    const packageId = upgradeCap?.package ?? fallbackPackageId;
     const motherlodeBalance = BigInt(motherlodeJson?.balance ?? "0");
     const game = gameObject.json as GameJson;
     const refinery = refineryObject.json as RefineryJson;
@@ -115,7 +117,7 @@ export async function GET(request: Request) {
       packageId, gameId, refineryId, upgradeCapId, ledgerId,
       gameType: (gameObject as { type?: string }).type ?? null,
       refineryType: (refineryObject as { type?: string }).type ?? null,
-      upgradeCap: (upgradeCapObject as { json?: unknown }).json ?? null,
+      upgradeCap,
       round: Number(game.round), closesAtMs: Number(game.closes_at_ms),
       remainingMs: Math.max(0, Number(game.closes_at_ms) - now), settled: game.settled,
       rewardsBound: game.reward_cap !== null, winningTile: winner === null ? null : winner + 1,

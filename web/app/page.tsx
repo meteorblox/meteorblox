@@ -49,6 +49,7 @@ const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
 
 type ChainState = {
+  packageId: string;
   upgradeCap: { version?: string } | null;
   round: number; closesAtMs: number; remainingMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
@@ -82,6 +83,7 @@ export default function Home() {
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
+  const activePackageId = chainState?.packageId ?? packageId;
   const [winningFlashTile, setWinningFlashTile] = useState<number | null>(null);
   const [simulatedTiles, setSimulatedTiles] = useState<number[]>([]);
   const lastFlashedRound = useRef<number | null>(null);
@@ -370,18 +372,18 @@ export default function Home() {
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
     transaction.moveCall({
-      target: `${packageId}::game::prepare_round_for_entry`,
+      target: `${activePackageId}::game::prepare_round_for_entry`,
       arguments: [transaction.object(gameId), transaction.object(suiClockId)],
     });
     if (rounds > 1) {
       const totalMist = mistPerTile * BigInt(selected.length) * BigInt(rounds);
       const [payment] = transaction.splitCoins(transaction.gas, [transaction.pure.u64(totalMist)]);
       transaction.moveCall({
-        target: `${packageId}::autoplay::create_plan`,
+        target: `${activePackageId}::autoplay::create_plan`,
         arguments: [transaction.object(autoplayRegistryId), transaction.pure.vector("u8", selected.map((tile) => tile - 1)), transaction.pure.u64(mistPerTile), transaction.pure.u64(rounds), payment],
       });
       transaction.moveCall({
-        target: `${packageId}::autoplay::execute_round`,
+        target: `${activePackageId}::autoplay::execute_round`,
         arguments: [transaction.object(autoplayRegistryId), transaction.object(gameId), transaction.object(suiClockId)],
       });
     } else {
@@ -389,7 +391,7 @@ export default function Home() {
       const clock = transaction.object(suiClockId);
       selected.forEach((tile) => {
         const [payment] = transaction.splitCoins(transaction.gas, [transaction.pure.u64(mistPerTile)]);
-        transaction.moveCall({ target: `${packageId}::game::place`, arguments: [game, transaction.pure.u8(tile - 1), payment, clock] });
+        transaction.moveCall({ target: `${activePackageId}::game::place`, arguments: [game, transaction.pure.u8(tile - 1), payment, clock] });
       });
     }
     setSubmittingPlay(true);
@@ -432,8 +434,8 @@ export default function Home() {
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
     const game = transaction.object(gameId);
-    transaction.moveCall({ target: `${packageId}::game::bind_dslvr_rewards`, arguments: [game, transaction.object(rewardCapId)] });
-    transaction.moveCall({ target: `${packageId}::game::open_next_round`, arguments: [game, transaction.object(suiClockId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::bind_dslvr_rewards`, arguments: [game, transaction.object(rewardCapId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::open_next_round`, arguments: [game, transaction.object(suiClockId)] });
     setActivatingGame(true);
     setNotice("Waiting for Slush to activate the first live round...");
     try {
@@ -452,7 +454,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${packageId}::game::settle`, arguments: [transaction.object(gameId), transaction.object(refineryId), transaction.object(suiRandomId), transaction.object(suiClockId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::settle`, arguments: [transaction.object(gameId), transaction.object(refineryId), transaction.object(suiRandomId), transaction.object(suiClockId)] });
     setRoundAction(true); setNotice("Waiting for wallet approval to reveal the winning block...");
     try {
       const result = await executeWithSlush(transaction);
@@ -495,7 +497,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${continuousPackageId}::game::create_rewards_ledger`, arguments: [transaction.object(gameId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::create_rewards_ledger`, arguments: [transaction.object(gameId)] });
     setCreatingLedger(true);
     setNotice("Waiting for owner approval to create the Rewards Ledger...");
     try {
@@ -512,7 +514,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${continuousPackageId}::autoplay::create_registry` });
+    transaction.moveCall({ target: `${activePackageId}::autoplay::create_registry` });
     setCreatingAutoplayRegistry(true);
     setNotice("Waiting for owner approval to activate the shared autoplay registry...");
     try {
@@ -529,7 +531,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${packageId}::staking::create_vault` });
+    transaction.moveCall({ target: `${activePackageId}::staking::create_vault` });
     setCreatingStakingVault(true);
     setNotice("Waiting for owner approval to create the shared DSLVR staking vault...");
     try {
@@ -556,9 +558,9 @@ export default function Home() {
     transaction.setGasBudget(30_000_000);
     if (stakeMode === "stake") {
       const payment = transaction.coin({ type: dslvrCoinType, balance: units });
-      transaction.moveCall({ target: `${packageId}::staking::stake`, arguments: [transaction.object(stakingVaultId), payment] });
+      transaction.moveCall({ target: `${activePackageId}::staking::stake`, arguments: [transaction.object(stakingVaultId), payment] });
     } else {
-      transaction.moveCall({ target: `${packageId}::staking::unstake`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units)] });
+      transaction.moveCall({ target: `${activePackageId}::staking::unstake`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units)] });
     }
     setSubmittingStake(true);
     setNotice(`Waiting for wallet approval to ${stakeMode} DSLVR...`);
@@ -582,7 +584,7 @@ export default function Home() {
     transaction.setGasBudget(25_000_000);
     // The on-chain ledger consolidates all winnings into one credit per wallet,
     // so one call claims the wallet's complete reward-ledger balance.
-    transaction.moveCall({ target: `${continuousPackageId}::ledger::claim_sui`, arguments: [transaction.object(ledgerId)] });
+    transaction.moveCall({ target: `${activePackageId}::ledger::claim_sui`, arguments: [transaction.object(ledgerId)] });
     setRoundAction(true);
     setNotice("Waiting for wallet approval to claim SUI rewards...");
     try {
@@ -834,7 +836,7 @@ export default function Home() {
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
     transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${packageId}::game::close_empty_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::close_empty_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
     setRoundAction(true);
     setNotice("Waiting for owner approval to close the empty round...");
     try {
@@ -851,7 +853,7 @@ export default function Home() {
     if (!count) return setNotice("This wallet has no winning entries to claim in the current round.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
-    for (let index = 0; index < count; index += 1) transaction.moveCall({ target: `${packageId}::game::claim`, arguments: [transaction.object(gameId), transaction.object(refineryId), transaction.object(suiClockId)] });
+    for (let index = 0; index < count; index += 1) transaction.moveCall({ target: `${activePackageId}::game::claim`, arguments: [transaction.object(gameId), transaction.object(refineryId), transaction.object(suiClockId)] });
     setRoundAction(true); setNotice("Waiting for wallet approval to claim SUI and award DSLVR...");
     try {
       const result = await executeWithSlush(transaction);
@@ -864,9 +866,9 @@ export default function Home() {
     if (!currentAccount) return setConnectOpen(true);
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
-    transaction.moveCall({ target: `${packageId}::game::open_next_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
+    transaction.moveCall({ target: `${activePackageId}::game::open_next_round`, arguments: [transaction.object(gameId), transaction.object(suiClockId)] });
     if (autoplayRegistryId) {
-      transaction.moveCall({ target: `${packageId}::autoplay::execute_round`, arguments: [transaction.object(autoplayRegistryId), transaction.object(gameId), transaction.object(suiClockId)] });
+      transaction.moveCall({ target: `${activePackageId}::autoplay::execute_round`, arguments: [transaction.object(autoplayRegistryId), transaction.object(gameId), transaction.object(suiClockId)] });
     }
     setRoundAction(true); setNotice("Waiting for owner approval to open the next round...");
     try {
@@ -882,7 +884,7 @@ export default function Home() {
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
-    const target = `${packageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
+    const target = `${activePackageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
     for (let index = 0; index < count; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
     setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} DSLVR...`);
     try {
@@ -999,7 +1001,7 @@ export default function Home() {
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         <article className="claim-card testnet-publish"><small>TESTNET ROUND AUTOMATION</small><h2>Idle-round system live</h2><p>Empty rounds pause without keeper transactions. The next player starts a fresh round automatically as part of their play.</p></article>
-        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 5 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Activate DSLVR mining rewards</h2><p>The live package is still on version {chainState?.upgradeCap?.version ?? "—"}. This tested one-time upgrade enables the 0.25 DSLVR round reward, split proportionally among winning deployments, and preserves the existing Game, Ledger, Refinery, autoplay plans, and balances.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 5"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 6 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Activate regular DSLVR mining rewards</h2><p>The live package is still on version {chainState?.upgradeCap?.version ?? "—"}. This tested one-time upgrade splits 0.25 DSLVR among winning deployments every occupied round while separately adding 0.2 DSLVR to the Motherlode. Existing Game, Ledger, Refinery, autoplay plans, and balances are preserved.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 6"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}

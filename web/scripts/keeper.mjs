@@ -2,7 +2,8 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 
-const packageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
+const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
+const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
@@ -23,9 +24,13 @@ console.log(`[keeper] Testnet keeper ${keypair.toSuiAddress()} started (polling 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function tick() {
-  const { object } = await client.core.getObject({ objectId: gameId, include: { json: true } });
+  const [{ object }, { object: upgradeCapObject }] = await Promise.all([
+    client.core.getObject({ objectId: gameId, include: { json: true } }),
+    client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
+  ]);
   const game = object.json;
   if (!game) return;
+  const packageId = upgradeCapObject.json?.package ?? fallbackPackageId;
 
   if (game.settled) return;
 

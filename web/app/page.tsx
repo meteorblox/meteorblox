@@ -49,6 +49,7 @@ const suiRandomId = "0x8";
 const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 0.049, 0.052, 0.042, 0.046, 0.053, 0.045, 0.046, 0.043, 0.057, 0.041, 0.049, 0.049, 0.043, 0.062, 0.058, 0.055, 0.052];
 
 type ChainState = {
+  upgradeCap: { version?: string } | null;
   round: number; closesAtMs: number; remainingMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
@@ -479,10 +480,10 @@ export default function Home() {
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
     setUpgradingPackage(true);
-    setNotice("Waiting for the owner wallet to approve the idle-round Testnet upgrade...");
+    setNotice("Waiting for the owner wallet to approve the DSLVR mining-rewards Testnet upgrade...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) setNotice(`SLVRBLOX idle-round Testnet upgrade completed. Transaction: ${result.digest}`);
+      if (result) { setNotice(`SLVRBLOX DSLVR mining-rewards upgrade completed. Transaction: ${result.digest}`); await refreshChainState(); }
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
@@ -998,6 +999,7 @@ export default function Home() {
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         <article className="claim-card testnet-publish"><small>TESTNET ROUND AUTOMATION</small><h2>Idle-round system live</h2><p>Empty rounds pause without keeper transactions. The next player starts a fresh round automatically as part of their play.</p></article>
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 5 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Activate DSLVR mining rewards</h2><p>The live package is still on version {chainState?.upgradeCap?.version ?? "—"}. This tested one-time upgrade enables the 0.25 DSLVR round reward, split proportionally among winning deployments, and preserves the existing Game, Ledger, Refinery, autoplay plans, and balances.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 5"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}

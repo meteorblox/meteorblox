@@ -11,7 +11,7 @@ export default function AirdropPage() {
   return <ProtocolPage
     eyebrow="TESTNET PARTICIPATION"
     title="Tester Airdrop"
-    intro="Active SLVRBLOX Testnet participants may qualify for a future DSLVR airdrop. The program rewards consistent, useful testing—not Testnet SUI expenditure. Testnet tokens have no monetary value, and qualification does not guarantee a specific allocation."
+    intro="Active SLVRBLOX Testnet participants can qualify for a future DSLVR airdrop. The program rewards consistent, useful testing—not Testnet SUI expenditure. Testnet tokens have no monetary value, and qualification does not guarantee a specific allocation."
     sections={[
       {
         title: "Qualification levels",

@@ -5,7 +5,7 @@ const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec
 const entryEventType = `${originPackageId}::game::EntryPlaced`;
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const graphqlUrl = "https://graphql.testnet.sui.io/graphql";
-const dailyQualifyingRoundCap = 50;
+export const dailyQualifyingRoundCap = 50;
 const client = new SuiGrpcClient({ network: "testnet", baseUrl: rpcUrl });
 
 type EntryJson = { player?: string; round?: string | number };
@@ -13,7 +13,7 @@ type IndexedEntry = { player: string; round: number; checkpoint: string };
 type GameJson = { round: string; settled: boolean };
 type Level = { name: string; rounds: number; days: number };
 
-const levels: Level[] = [
+export const levels: Level[] = [
   { name: "BLOX TESTER", rounds: 25, days: 5 },
   { name: "ACTIVE MINER", rounds: 75, days: 10 },
   { name: "CORE TESTER", rounds: 200, days: 20 },
@@ -29,6 +29,7 @@ async function loadEntryIndex() {
   let before: string | null = null;
   let pageCount = 0;
 
+  let historyComplete = false;
   do {
     const page = await client.core.listEvents({
       filter: { eventType: entryEventType },
@@ -43,10 +44,12 @@ async function loadEntryIndex() {
       if (player && Number.isSafeInteger(round) && event.checkpoint) entries.push({ player, round, checkpoint: event.checkpoint });
     }
     pageCount += 1;
-    if (!page.hasNextPage) break;
+    if (!page.hasNextPage) { historyComplete = true; break; }
     if (!page.endCursor || page.endCursor === before) throw new Error("Entry history pagination stalled");
     before = page.endCursor;
   } while (pageCount < 1_000);
+
+  if (!historyComplete) throw new Error("Entry history exceeds the safe pagination limit");
 
   entryCache = { entries, expiresAt: Date.now() + 5 * 60_000 };
   return entries;
@@ -74,17 +77,21 @@ async function loadCheckpointDays(checkpoints: string[]) {
   }
 }
 
-function settledEntries(entries: IndexedEntry[], game: GameJson) {
+export function settledEntries(entries: IndexedEntry[], game: GameJson) {
   const currentRound = Number(game.round);
   return entries.filter((entry) => entry.round < currentRound || (entry.round === currentRound && game.settled));
 }
 
-function summarize(player: string, entries: IndexedEntry[]) {
+export function summarize(player: string, entries: IndexedEntry[], checkpointDays: ReadonlyMap<string, string> = checkpointDayCache) {
   const roundCheckpoints = new Map<number, string>();
-  for (const entry of entries) if (entry.player === player && !roundCheckpoints.has(entry.round)) roundCheckpoints.set(entry.round, entry.checkpoint);
+  for (const entry of entries) {
+    if (entry.player !== player) continue;
+    const existing = roundCheckpoints.get(entry.round);
+    if (!existing || BigInt(entry.checkpoint) < BigInt(existing)) roundCheckpoints.set(entry.round, entry.checkpoint);
+  }
   const roundsByDay = new Map<string, number>();
   for (const checkpoint of roundCheckpoints.values()) {
-    const day = checkpointDayCache.get(checkpoint);
+    const day = checkpointDays.get(checkpoint);
     if (day) roundsByDay.set(day, (roundsByDay.get(day) ?? 0) + 1);
   }
   const days = roundsByDay.size;
@@ -92,7 +99,12 @@ function summarize(player: string, entries: IndexedEntry[]) {
   const achievedIndex = levels.findLastIndex((level) => rounds >= level.rounds && days >= level.days);
   const achieved = achievedIndex >= 0 ? levels[achievedIndex] : null;
   const next = levels.find((level) => rounds < level.rounds || days < level.days) ?? null;
-  return { address: player, qualifyingRounds: rounds, activeDays: days, currentLevel: achieved?.name ?? "TESTNET PROSPECTOR", levelRank: achievedIndex + 1, nextLevel: next };
+  const currentLevel = achieved?.name === "MASTER MINER" ? "MASTER MINER (PROVISIONAL)" : achieved?.name ?? "TESTNET PROSPECTOR";
+  return { address: player, qualifyingRounds: rounds, activeDays: days, currentLevel, levelRank: achievedIndex + 1, nextLevel: next };
+}
+
+export function qualificationProgress(summary: ReturnType<typeof summarize>) {
+  return summary.nextLevel ? Math.min(100, Math.floor(Math.min(summary.qualifyingRounds / summary.nextLevel.rounds, summary.activeDays / summary.nextLevel.days) * 100)) : 100;
 }
 
 export async function GET(request: Request) {
@@ -119,7 +131,7 @@ export async function GET(request: Request) {
     }
 
     const summary = summarize(address, settled);
-    const progress = summary.nextLevel ? Math.min(100, Math.floor(Math.min(summary.qualifyingRounds / summary.nextLevel.rounds, summary.activeDays / summary.nextLevel.days) * 100)) : 100;
+    const progress = qualificationProgress(summary);
     return Response.json({
       address,
       qualifyingRounds: summary.qualifyingRounds,

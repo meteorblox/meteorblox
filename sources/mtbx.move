@@ -10,7 +10,7 @@ use sui::tx_context::{Self, TxContext};
 /// Six display decimals. All internal amounts are atomic DSLVR units.
 const DECIMALS: u8 = 6;
 const UNIT: u64 = 1_000_000;
-const MAX_SUPPLY: u64 = 25_000_000 * UNIT;
+const MAX_SUPPLY: u64 = 5_000_000 * UNIT;
 const REFINE_MS: u64 = 86_400_000;
 const EARLY_PENALTY_BPS: u64 = 1_000;
 const BPS: u64 = 10_000;
@@ -204,7 +204,7 @@ fun mul_div(value: u64, numerator: u64, denominator: u64): u64 {
 
 #[test]
 fun test_supply_and_refining_constants() {
-    assert!(MAX_SUPPLY == 25_000_000_000_000, 100);
+    assert!(MAX_SUPPLY == 5_000_000_000_000, 100);
     assert!(REFINE_MS == 86_400_000, 101);
 }
 

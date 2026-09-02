@@ -61,7 +61,22 @@ async function tick() {
   if (Date.now() < Number(game.closes_at_ms)) return;
 
   const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries ?? []).some((entry) => BigInt(entry.round) === currentRound);
-  if (!occupied) return;
+  if (!occupied) {
+    const rolloverTx = new Transaction();
+    rolloverTx.setSender(keypair.toSuiAddress());
+    rolloverTx.setGasBudget(20_000_000);
+    rolloverTx.moveCall({
+      target: `${packageId}::game::close_empty_and_open_next`,
+      arguments: [rolloverTx.object(gameId), rolloverTx.object(clockId)],
+    });
+    const rolloverResult = await keypair.signAndExecuteTransaction({ transaction: rolloverTx, client });
+    if (rolloverResult.$kind === "FailedTransaction") {
+      throw new Error(rolloverResult.FailedTransaction.status.error?.message ?? "Empty-round rollover failed");
+    }
+    console.log(`[keeper] Closed empty round ${currentRound} and opened the next round. Transaction: ${rolloverResult.Transaction.digest}`);
+    await client.core.waitForTransaction({ digest: rolloverResult.Transaction.digest, timeout: 60_000 });
+    return;
+  }
 
   const tx = new Transaction();
   tx.setSender(keypair.toSuiAddress());

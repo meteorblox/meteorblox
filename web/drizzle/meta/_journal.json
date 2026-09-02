@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788350400000,
+      "tag": "0000_wallet_profiles",
+      "breakpoints": true
+    }
+  ]
 }

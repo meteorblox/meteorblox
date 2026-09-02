@@ -1,4 +1,5 @@
 import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { getProfiles } from "../../../db/profiles";
 
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const originPackageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
@@ -123,10 +124,11 @@ export async function GET(request: Request) {
 
     if (leaderboardRequested) {
       const players = [...new Set(settled.map((entry) => entry.player))];
+      const profiles = await getProfiles(players);
       const testers = players.map((player) => summarize(player, settled))
         .sort((a, b) => b.levelRank - a.levelRank || b.activeDays - a.activeDays || b.qualifyingRounds - a.qualifyingRounds || a.address.localeCompare(b.address))
         .slice(0, 25)
-        .map(({ levelRank: _levelRank, nextLevel: _nextLevel, ...tester }, index) => ({ rank: index + 1, ...tester }));
+        .map(({ levelRank: _levelRank, nextLevel: _nextLevel, ...tester }, index) => ({ rank: index + 1, ...tester, username: profiles.get(tester.address) ?? "" }));
       return Response.json({ testers, totalTesters: players.length, methodology: `Ranked by achieved level, active UTC days, then qualifying settled rounds, capped at ${dailyQualifyingRoundCap} per UTC day. Master Miner remains provisional until final manual-action review.`, updatedAt: new Date().toISOString() }, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
     }
 

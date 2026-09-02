@@ -11,6 +11,7 @@ const randomId = "0x8";
 const clockId = "0x6";
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
+const autoplayGasBudget = Math.max(20_000_000, Number(process.env.AUTOPLAY_GAS_BUDGET ?? 100_000_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 let lastAutoplayRound = -1n;
@@ -43,7 +44,10 @@ async function tick() {
   if (hasActiveAutoplay) {
     const autoplayTx = new Transaction();
     autoplayTx.setSender(keypair.toSuiAddress());
-    autoplayTx.setGasBudget(20_000_000);
+    // Executing every active plan mutates substantially more state than an
+    // empty-round rollover. Keep its budget separate so a healthy keeper
+    // balance is not misreported as InsufficientGas under autoplay load.
+    autoplayTx.setGasBudget(autoplayGasBudget);
     autoplayTx.moveCall({
       target: `${packageId}::autoplay::execute_random_round`,
       arguments: [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(randomId), autoplayTx.object(clockId)],

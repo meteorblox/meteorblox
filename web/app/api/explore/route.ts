@@ -32,11 +32,29 @@ export async function GET() {
     ]);
     const entries = entryResult.events as EventRecord[];
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
-    const rounds = (settledResult.events as EventRecord[]).map((event) => ({
-      round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.winning_tile ?? 0) + 1,
-      deployedSui: sui(event.json?.gross), rewardPoolSui: sui(event.json?.winner_pool),
-      transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
-    }));
+    const rounds = (settledResult.events as EventRecord[]).map((event) => {
+      const round = Number(event.json?.round ?? 0);
+      const gross = asBigInt(event.json?.gross);
+      const winnerPool = asBigInt(event.json?.winner_pool);
+      const claims = winnings.filter((claim) => Number(claim.json?.round ?? 0) === round);
+      const winningWallets = [...new Set(claims.map((claim) => String(claim.json?.player ?? "").toLowerCase()).filter(Boolean))];
+      const dslvrPaid = claims.reduce((sum, claim) => sum + asBigInt(claim.json?.dslvr_amount), 0n);
+      return {
+        round,
+        winningTile: Number(event.json?.winning_tile ?? 0) + 1,
+        winnerType: winningWallets.length > 1 ? "split" : winningWallets.length === 1 ? "individual" : "pending",
+        winnerAddress: winningWallets.length === 1 ? winningWallets[0] : null,
+        winnerCount: winningWallets.length,
+        winningEntries: claims.length,
+        deployedSui: sui(gross),
+        vaultedSui: sui(gross - winnerPool),
+        winningsSui: sui(winnerPool),
+        dslvrWinnings: dslvr(dslvrPaid),
+        rewardPoolSui: sui(winnerPool),
+        transaction: event.transactionDigest ?? null,
+        timestamp: event.timestamp ?? null,
+      };
+    });
     const audit = rounds.slice(0, 10).map((round) => {
       const settled = (settledResult.events as EventRecord[]).find((event) => Number(event.json?.round ?? 0) === round.round);
       const gross = asBigInt(settled?.json?.gross);

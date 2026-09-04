@@ -39,7 +39,12 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unable to post message";
-    const safeMessage = /wait 10 seconds|Hourly message limit/i.test(detail) ? detail : "Unable to verify and post message";
+    console.error("[chat] POST failed", error);
+    const safeMessage = /wait 10 seconds|Hourly message limit/i.test(detail)
+      ? detail
+      : /UNIQUE constraint failed: chat_messages\.signature/i.test(detail)
+        ? "This signed message was already submitted. Refresh the chat."
+        : "Unable to verify and post message";
     return Response.json({ error: safeMessage }, { status: 400 });
   }
 }

@@ -6,13 +6,14 @@ import Link from "next/link";
 type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; playedTiles: number[]; settled: boolean };
 type ExploreActivity = {
   packageId: string; indexedEntries: number; indexedMiners: number; indexedDeployedSui: number;
-  rounds: Array<{ round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
+  rounds: Array<{ round: number; winningTile: number; winnerType: "split" | "individual" | "pending"; winnerAddress: string | null; winnerCount: number; winningEntries: number; deployedSui: number; vaultedSui: number; winningsSui: number; dslvrWinnings: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
   motherlodes: Array<{ round: number; winningTile: number; addedDslvr: number; balanceDslvr: number; hit: boolean; transaction: string | null; timestamp: string | null }>;
   audit: Array<{ round: number; expectedWinnerPoolSui: number; actualWinnerPoolSui: number; treasurySui: number; rewardsSui: number; opsSui: number; paidSui: number; paidDslvr: number; winnerClaims: number; status: "pass" | "mismatch" | "pending" }>;
   auditSummary: { checked: number; passed: number; mismatches: number; pending: number };
 };
 
 const dateLabel = (timestamp: string | null) => timestamp ? new Date(timestamp).toLocaleString() : "Confirmed";
+const shortAddress = (address: string | null) => address ? `${address.slice(0, 5)}…${address.slice(-4)}` : "Indexing";
 
 export default function ExplorePage() {
   const [data, setData] = useState<ExploreState | null>(null);
@@ -70,8 +71,8 @@ export default function ExplorePage() {
     <section className="explore-activity"><h2>Verified activity</h2>
       <div className="explore-tabs"><button className="active">Rounds</button></div>
       <div className="activity-table">
-        <div className="activity-row activity-head"><span>ROUND</span><span>WINNING BLOCK</span><span>DEPLOYED</span><span>SUI WINNER POOL</span><span>SETTLEMENT</span></div>
-        {(activity?.rounds ?? []).map((round) => <div className="activity-row" key={`${round.round}-${round.transaction}`}><strong>#{String(round.round).padStart(6, "0")}</strong><span>Block {round.winningTile}</span><span>{round.deployedSui.toFixed(4)} SUI</span><span>{round.rewardPoolSui.toFixed(4)} SUI</span>{round.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${round.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(round.timestamp)}>View ↗</a> : <span>Confirmed</span>}</div>)}
+        <div className="activity-row activity-head"><span>ROUND</span><span>TILE</span><span>DSLVR WINNER</span><span>WINNERS</span><span>DEPLOYED</span><span>VAULTED</span><span>WINNINGS</span><span>TIME</span></div>
+        {(activity?.rounds ?? []).map((round) => <div className="activity-row" key={`${round.round}-${round.transaction}`}><strong>#{String(round.round).padStart(6, "0")}</strong><span>#{round.winningTile}</span><span>{round.winnerType === "split" ? <b className="winner-split">Split</b> : round.winnerType === "individual" ? <b className="winner-wallet" title={round.winnerAddress ?? undefined}>{shortAddress(round.winnerAddress)}</b> : <b className="winner-pending">Indexing</b>}</span><span title={`${round.winningEntries} winning ${round.winningEntries === 1 ? "entry" : "entries"}`}>{round.winnerCount}</span><span>{round.deployedSui.toFixed(4)} SUI</span><span>{round.vaultedSui.toFixed(4)} SUI</span><span><strong>{round.winningsSui.toFixed(4)} SUI</strong><small>{round.dslvrWinnings.toFixed(4)} DSLVR</small></span>{round.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${round.transaction}`} target="_blank" rel="noreferrer" title="View settlement transaction">{dateLabel(round.timestamp)}</a> : <span>{dateLabel(round.timestamp)}</span>}</div>)}
         {!activity?.rounds.length && <p className="activity-empty">Waiting for the next settlement.</p>}
       </div>
     </section>

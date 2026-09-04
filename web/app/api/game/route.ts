@@ -139,6 +139,7 @@ export async function GET(request: Request) {
       walletDslvr: walletDslvrBalanceResult ? mtbx(BigInt(walletDslvrBalanceResult.balance.balance)) : 0,
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,
+      alertsConfigured: Boolean(process.env.RESEND_API_KEY && process.env.OPS_ALERT_EMAIL),
       motherlodeDslvr: mtbx(motherlodeBalance),
       refineryTotals: {
         awardedDslvr: mtbx(BigInt(refinery.awarded)),

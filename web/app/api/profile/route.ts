@@ -1,9 +1,14 @@
 import { fromBase64 } from "@mysten/bcs";
+import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { getProfiles, saveProfile } from "../../../db/profiles";
 
 const addressPattern = /^0x[a-f0-9]{64}$/;
 const usernamePattern = /^[A-Za-z0-9_-]{3,20}$/;
+const suiClient = new SuiJsonRpcClient({
+  network: "testnet",
+  url: getJsonRpcFullnodeUrl("testnet"),
+});
 
 export function profileMessage(address: string, username: string) {
   return `SLVRBLOX profile\nWallet: ${address.toLowerCase()}\nUsername: ${username}`;
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
     if (signed.length !== expected.length || !signed.every((value, index) => value === expected[index])) {
       return Response.json({ error: "Signed profile message does not match" }, { status: 400 });
     }
-    await verifyPersonalMessageSignature(signed, body.signature, { address });
+    await verifyPersonalMessageSignature(signed, body.signature, { address, client: suiClient });
     await saveProfile(address, username);
     return Response.json({ address, username });
   } catch (error) {

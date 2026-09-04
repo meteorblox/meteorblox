@@ -110,6 +110,15 @@ export async function GET(request: Request) {
       amountPerTileSui: sui(BigInt(plan.amount_per_tile)),
       fundedSui: sui(BigInt(plan.funds)), lastRoundPlayed: Number(plan.last_round_played),
     })) : [];
+    const activeGlobalPlans = (registry?.plans ?? []).filter((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n);
+    const pendingGlobalPlans = activeGlobalPlans.filter((plan) => BigInt(plan.last_round_played) < round);
+    const globalAutoplay = {
+      activePlans: activeGlobalPlans.length,
+      pendingPlans: pendingGlobalPlans.length,
+      remainingRounds: activeGlobalPlans.reduce((sum, plan) => sum + Number(plan.rounds_remaining), 0),
+      batchSize: Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 25)),
+      packageVersion: Number((upgradeCap as { version?: string } | null)?.version ?? 0),
+    };
     const playedTiles = address ? Array.from(new Set(game.entries.filter((entry) =>
       entry.player.toLowerCase() === address && BigInt(entry.round) === round
     ).map((entry) => entry.tile + 1))) : [];
@@ -148,6 +157,7 @@ export async function GET(request: Request) {
         openPositions: refinery.positions.filter((position) => !position.claimed).length,
       },
       autoplayPlans,
+      globalAutoplay,
       playedTiles,
       lastRound,
       nextMaturityMs: unrefinedPositions.length ? Math.min(...unrefinedPositions.map(({ position }) => Number(position.matures_at_ms))) : null,

@@ -899,9 +899,9 @@ export default function Home() {
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
     // Each claim scans the shared refinery positions. Keep wallet transactions
     // bounded so players with many matured rewards do not exhaust Sui gas.
-    const batchCount = Math.min(count, 4);
+    const batchCount = 1;
     const transaction = new Transaction();
-    transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
+    transaction.setSender(currentAccount.address); transaction.setGasBudget(200_000_000);
     const target = `${activePackageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
     for (let index = 0; index < batchCount; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
     setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} ${batchCount} DSLVR position${batchCount === 1 ? "" : "s"}...`);

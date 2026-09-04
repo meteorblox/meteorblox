@@ -1,9 +1,14 @@
 import { fromBase64 } from "@mysten/bcs";
+import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { getChatMessages, saveChatMessage } from "../../../db/chat";
 
 const addressPattern = /^0x[a-f0-9]{64}$/;
 const maxMessageLength = 500;
+const suiClient = new SuiJsonRpcClient({
+  network: "testnet",
+  url: getJsonRpcFullnodeUrl("testnet"),
+});
 
 export function chatMessage(address: string, message: string, timestamp: number) {
   return `SLVRBLOX community chat\nWallet: ${address}\nTimestamp: ${timestamp}\nMessage: ${message}`;
@@ -34,7 +39,7 @@ export async function POST(request: Request) {
     if (signed.length !== expected.length || !signed.every((value, index) => value === expected[index])) {
       return Response.json({ error: "Signed chat message does not match" }, { status: 400 });
     }
-    await verifyPersonalMessageSignature(signed, body.signature, { address });
+    await verifyPersonalMessageSignature(signed, body.signature, { address, client: suiClient });
     await saveChatMessage(address, message, body.signature, timestamp);
     return Response.json({ ok: true });
   } catch (error) {

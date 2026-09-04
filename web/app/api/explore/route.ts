@@ -8,26 +8,66 @@ const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://gra
 type EventRecord = { json?: Record<string, unknown>; timestamp?: string | null; transactionDigest?: string | null };
 const sui = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_000_000;
 const dslvr = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_000;
+const asBigInt = (value: unknown) => BigInt(String(value ?? "0"));
+
+async function recentEvents(eventType: string, pages = 6) {
+  const events: EventRecord[] = [];
+  let before: string | null | undefined;
+  for (let page = 0; page < pages; page += 1) {
+    const result = await eventClient.core.listEvents({ filter: { eventType }, limit: 50, order: "descending", ...(before ? { before } : {}) });
+    events.push(...result.events as EventRecord[]);
+    if (!result.hasNextPage || !result.endCursor) break;
+    before = result.endCursor;
+  }
+  return events;
+}
 
 export async function GET() {
   try {
-    const [settledResult, entryResult, motherlodeResult] = await Promise.all([
+    const [settledResult, entryResult, motherlodeResult, winnings] = await Promise.all([
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 25, order: "descending" }),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
       eventClient.core.listEvents({ filter: { eventType: `${motherlodePackageId}::game::MotherlodeUpdated` }, limit: 25, order: "descending" }),
+      recentEvents(`${packageId}::game::WinningsClaimed`),
     ]);
     const entries = entryResult.events as EventRecord[];
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
+    const rounds = (settledResult.events as EventRecord[]).map((event) => ({
+      round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.winning_tile ?? 0) + 1,
+      deployedSui: sui(event.json?.gross), rewardPoolSui: sui(event.json?.winner_pool),
+      transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
+    }));
+    const audit = rounds.slice(0, 10).map((round) => {
+      const settled = (settledResult.events as EventRecord[]).find((event) => Number(event.json?.round ?? 0) === round.round);
+      const gross = asBigInt(settled?.json?.gross);
+      const winnerPool = asBigInt(settled?.json?.winner_pool);
+      const protocolFee = gross * 1_000n / 10_000n;
+      const expectedWinnerPool = gross - protocolFee;
+      const treasury = gross * 500n / 10_000n;
+      const rewards = gross * 200n / 10_000n;
+      const ops = protocolFee - treasury - rewards;
+      const claims = winnings.filter((event) => Number(event.json?.round ?? 0) === round.round);
+      const paidSui = claims.reduce((sum, event) => sum + asBigInt(event.json?.amount), 0n);
+      const paidDslvr = claims.reduce((sum, event) => sum + asBigInt(event.json?.dslvr_amount), 0n);
+      const poolMatches = winnerPool === expectedWinnerPool;
+      const payoutsMatch = claims.length > 0 && paidSui === winnerPool;
+      const dslvrMatches = claims.length > 0 && paidDslvr === 250_000n;
+      return {
+        round: round.round,
+        expectedWinnerPoolSui: sui(expectedWinnerPool), actualWinnerPoolSui: sui(winnerPool),
+        treasurySui: sui(treasury), rewardsSui: sui(rewards), opsSui: sui(ops),
+        paidSui: sui(paidSui), paidDslvr: dslvr(paidDslvr), winnerClaims: claims.length,
+        status: poolMatches && payoutsMatch && dslvrMatches ? "pass" : claims.length ? "mismatch" : "pending",
+      };
+    });
     return Response.json({
       packageId,
       indexedEntries: entries.length,
       indexedMiners: miners.size,
       indexedDeployedSui: entries.reduce((sum, event) => sum + sui(event.json?.amount), 0),
-      rounds: (settledResult.events as EventRecord[]).map((event) => ({
-        round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.winning_tile ?? 0) + 1,
-        deployedSui: sui(event.json?.gross), rewardPoolSui: sui(event.json?.winner_pool),
-        transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
-      })),
+      rounds,
+      audit,
+      auditSummary: { checked: audit.length, passed: audit.filter((item) => item.status === "pass").length, mismatches: audit.filter((item) => item.status === "mismatch").length, pending: audit.filter((item) => item.status === "pending").length },
       motherlodes: (motherlodeResult.events as EventRecord[]).map((event) => ({
         round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.tile ?? 0) + 1,
         addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), hit: Boolean(event.json?.hit),

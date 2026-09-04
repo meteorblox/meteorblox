@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ChatDrawer } from "./chat/drawer";
 import { useCurrentAccount, useCurrentWallet, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 import { getWallets, type Wallet } from "@mysten/wallet-standard";
@@ -1075,6 +1076,7 @@ export default function Home() {
         <div className="onboarding-note"><strong>SUI TESTNET</strong><span>On mobile, open SLVRBLOX inside the wallet app and select Testnet there before approving. Testnet tokens have no monetary value.</span></div>
       </section></div>}
 
+      <ChatDrawer />
       {accountOpen && currentAccount && <div className="account-backdrop" role="presentation" onMouseDown={() => setAccountOpen(false)}><aside className="account-drawer" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="account-close" aria-label="Close wallet panel" onClick={() => setAccountOpen(false)}>×</button>
         <div className="account-avatar" aria-hidden="true"><span>M</span><i /></div>

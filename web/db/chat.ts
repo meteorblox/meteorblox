@@ -9,6 +9,11 @@ export type ChatMessage = {
 };
 
 async function ensureChatTable(db: NonNullable<Awaited<ReturnType<typeof getD1>>>) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS wallet_profiles (
+    address TEXT PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    updated_at INTEGER NOT NULL
+  )`).run();
   await db.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     address TEXT NOT NULL,

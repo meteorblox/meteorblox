@@ -1,13 +1,13 @@
 import { fromBase64 } from "@mysten/bcs";
-import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { getChatMessages, saveChatMessage } from "../../../db/chat";
 
 const addressPattern = /^0x[a-f0-9]{64}$/;
 const maxMessageLength = 500;
-const suiClient = new SuiJsonRpcClient({
+const suiClient = new SuiGraphQLClient({
   network: "testnet",
-  url: getJsonRpcFullnodeUrl("testnet"),
+  url: "https://graphql.testnet.sui.io/graphql",
 });
 
 export function chatMessage(address: string, message: string, timestamp: number) {

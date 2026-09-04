@@ -12,6 +12,8 @@ const clockId = "0x6";
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
 const autoplayGasBudget = Math.max(20_000_000, Number(process.env.AUTOPLAY_GAS_BUDGET ?? 100_000_000));
+const autoplayBatchSize = Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 25));
+const maxAutoplayBatches = Math.max(1, Number(process.env.MAX_AUTOPLAY_BATCHES ?? 30));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
 const keeperLowBalanceMist = 250_000_000n;
@@ -19,7 +21,6 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const alertEmail = process.env.OPS_ALERT_EMAIL;
 const alertFrom = process.env.ALERT_FROM_EMAIL ?? "SLVRBLOX Alerts <alerts@slvrblox.com>";
 const alertCooldownMs = Math.max(300_000, Number(process.env.ALERT_COOLDOWN_MS ?? 21_600_000));
-let lastAutoplayRound = -1n;
 let consecutiveFailures = 0;
 let lowBalanceActive = false;
 let missingAlertConfigLogged = false;
@@ -78,34 +79,44 @@ async function tick() {
   const game = object.json;
   if (!game) return;
   const packageId = upgradeCapObject.json?.package ?? fallbackPackageId;
+  const packageVersion = Number(upgradeCapObject.json?.version ?? 0);
 
   if (game.settled) return;
 
   const currentRound = BigInt(game.round);
   let hasActiveAutoplay = false;
-  if (autoplayRegistryId && currentRound !== lastAutoplayRound && Date.now() < Number(game.closes_at_ms)) {
+  if (autoplayRegistryId && Date.now() < Number(game.closes_at_ms)) {
     const { object: registryObject } = await client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } });
-    hasActiveAutoplay = (registryObject.json?.plans ?? []).some((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n);
+    hasActiveAutoplay = (registryObject.json?.plans ?? []).some((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n && BigInt(plan.last_round_played) < currentRound);
   }
   if (hasActiveAutoplay) {
-    const autoplayTx = new Transaction();
-    autoplayTx.setSender(keypair.toSuiAddress());
-    // Executing every active plan mutates substantially more state than an
-    // empty-round rollover. Keep its budget separate so a healthy keeper
-    // balance is not misreported as InsufficientGas under autoplay load.
-    autoplayTx.setGasBudget(autoplayGasBudget);
-    autoplayTx.moveCall({
-      target: `${packageId}::autoplay::execute_random_round`,
-      arguments: [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(randomId), autoplayTx.object(clockId)],
-    });
-    const autoplayResult = await keypair.signAndExecuteTransaction({ transaction: autoplayTx, client });
-    if (autoplayResult.$kind === "FailedTransaction") {
-      throw new Error(autoplayResult.FailedTransaction.status.error?.message ?? "Autoplay execution failed");
+    let batches = 0;
+    let pending = true;
+    while (pending && batches < maxAutoplayBatches && Date.now() < Number(game.closes_at_ms)) {
+      const autoplayTx = new Transaction();
+      autoplayTx.setSender(keypair.toSuiAddress());
+      autoplayTx.setGasBudget(autoplayGasBudget);
+      autoplayTx.moveCall({
+        target: `${packageId}::autoplay::${packageVersion >= 9 ? "execute_random_batch" : "execute_random_round"}`,
+        arguments: packageVersion >= 9
+          ? [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(randomId), autoplayTx.object(clockId), autoplayTx.pure.u64(autoplayBatchSize)]
+          : [autoplayTx.object(autoplayRegistryId), autoplayTx.object(gameId), autoplayTx.object(randomId), autoplayTx.object(clockId)],
+      });
+      const autoplayResult = await keypair.signAndExecuteTransaction({ transaction: autoplayTx, client });
+      if (autoplayResult.$kind === "FailedTransaction") {
+        throw new Error(autoplayResult.FailedTransaction.status.error?.message ?? "Autoplay execution failed");
+      }
+      batches += 1;
+      console.log(`[keeper] Executed autoplay ${packageVersion >= 9 ? `batch ${batches}` : "plans"} for round ${currentRound}. Transaction: ${autoplayResult.Transaction.digest}`);
+      await client.core.waitForTransaction({ digest: autoplayResult.Transaction.digest, timeout: 60_000 });
+      if (packageVersion < 9) pending = false;
+      else {
+        const { object: refreshedRegistry } = await client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } });
+        pending = (refreshedRegistry.json?.plans ?? []).some((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n && BigInt(plan.last_round_played) < currentRound);
+      }
     }
-    lastAutoplayRound = currentRound;
-    console.log(`[keeper] Executed autoplay plans for round ${currentRound}. Transaction: ${autoplayResult.Transaction.digest}`);
-    await client.core.waitForTransaction({ digest: autoplayResult.Transaction.digest, timeout: 60_000 });
-    return;
+    if (pending && Date.now() < Number(game.closes_at_ms)) console.log(`[keeper] Round ${currentRound} still has pending autoplay plans; continuing next cycle.`);
+    if (Date.now() < Number(game.closes_at_ms)) return;
   }
 
   if (Date.now() < Number(game.closes_at_ms)) return;

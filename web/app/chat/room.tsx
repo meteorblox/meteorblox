@@ -57,7 +57,7 @@ export function ChatRoom() {
   }
 
   return <main className="chat-page">
-    <header className="chat-header"><Link href="/" className="chat-brand"><img src="/brand/slvrblox-logo.png" alt="SLVRBLOX" /></Link><nav><Link href="/">Mine</Link><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link><Link className="active" href="/chat">Chat</Link></nav><span><i /> Sui Testnet</span></header>
+    <header className="chat-header"><Link href="/" className="chat-brand"><img src="/brand/slvrblox-logo.png" alt="SLVRBLOX" /></Link><nav><Link href="/">Mine</Link><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link></nav><span><i /> Sui Testnet</span></header>
     <section className="chat-shell">
       <div className="chat-title"><div><p>WALLET-VERIFIED COMMUNITY</p><h1>Miner Chat</h1><span>Talk strategy, report test results, and meet other SLVRBLOX miners.</span></div><b>{messages.length} recent messages</b></div>
       <div className="chat-feed" aria-live="polite">

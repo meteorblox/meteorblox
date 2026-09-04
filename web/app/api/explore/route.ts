@@ -4,6 +4,9 @@ const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e40
 // Sui event types retain the package version where the struct was introduced.
 const motherlodePackageId = "0x0de2330f503784f12b4abf7484f336976149e4056784ebb1709a4c38889e0b99";
 const eventClient = new SuiGraphQLClient({ network: "testnet", url: "https://graphql.testnet.sui.io/graphql" });
+const cacheTtlMs = 15_000;
+const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
+const inFlight = new Map<string, Promise<unknown>>();
 
 type EventRecord = { json?: Record<string, unknown>; timestamp?: string | null; transactionDigest?: string | null };
 const sui = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_000_000;
@@ -22,9 +25,7 @@ async function recentEvents(eventType: string, pages = 6) {
   return events;
 }
 
-export async function GET(request: Request) {
-  try {
-    const requestedPlayer = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
+async function loadExplore(requestedPlayer: string) {
     const [settledResult, entryResult, motherlodeResult, winnings] = await Promise.all([
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 25, order: "descending" }),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
@@ -98,7 +99,7 @@ export async function GET(request: Request) {
         record.dslvr += asBigInt(claim.json?.dslvr_amount);
       }
     }
-    return Response.json({
+    return {
       packageId,
       indexedEntries: entries.length,
       indexedMiners: miners.size,
@@ -116,8 +117,28 @@ export async function GET(request: Request) {
         addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), hit: Boolean(event.json?.hit),
         transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
       })),
-    }, { headers: { "cache-control": "no-store" } });
+    };
+}
+
+export async function GET(request: Request) {
+  const requestedPlayer = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
+  const cacheKey = /^0x[0-9a-f]{64}$/.test(requestedPlayer) ? requestedPlayer : "public";
+  const cached = responseCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return Response.json(cached.data, { headers: { "cache-control": "public, max-age=5, stale-while-revalidate=15", "x-slvrblox-cache": "hit" } });
+  }
+  try {
+    let pending = inFlight.get(cacheKey);
+    if (!pending) {
+      pending = loadExplore(requestedPlayer);
+      inFlight.set(cacheKey, pending);
+    }
+    const data = await pending;
+    responseCache.set(cacheKey, { data, expiresAt: Date.now() + cacheTtlMs });
+    return Response.json(data, { headers: { "cache-control": "public, max-age=5, stale-while-revalidate=15", "x-slvrblox-cache": "miss" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Explore activity unavailable" }, { status: 502, headers: { "cache-control": "no-store" } });
+  } finally {
+    inFlight.delete(cacheKey);
   }
 }

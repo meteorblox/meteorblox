@@ -72,6 +72,6 @@ export default function StatusPage() {
       <article><small>MOTHERLODE</small><strong>{state.game ? fmt(state.game.motherlodeDslvr, 2) : "—"} DSLVR</strong><dl><div><dt>Tracking</dt><dd className={state.game ? "good" : "bad"}>{state.game ? "Online" : "Unavailable"}</dd></div><div><dt>Source</dt><dd>On-chain event</dd></div></dl></article>
       <article><small>COMMUNITY CHAT</small><strong className={state.chatOnline ? "good" : "bad"}>{state.chatOnline ? "ONLINE" : "OFFLINE"}</strong><dl><div><dt>Wallet verification</dt><dd>{state.chatOnline ? "Ready" : "Unavailable"}</dd></div><div><dt>Storage</dt><dd>{state.chatOnline ? "Connected" : "Unknown"}</dd></div></dl></article>
     </section>
-    <footer className="status-footer"><span>Last checked {state.refreshedAt ? new Date(state.refreshedAt).toLocaleTimeString() : "—"}</span><div><Link href="/explore">View round audit →</Link><Link href="/">Back to mining →</Link></div></footer>
+    <footer className="status-footer"><span>Last checked {state.refreshedAt ? new Date(state.refreshedAt).toLocaleTimeString() : "—"}</span><div><Link href="/readiness">Mainnet readiness →</Link><Link href="/explore">View round audit →</Link><Link href="/">Back to mining →</Link></div></footer>
   </main>;
 }

@@ -52,7 +52,7 @@ export default function ExplorePage() {
   return <main className="explore-page">
     <header className="explore-topbar">
       <Link className="explore-brand" href="/"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></Link>
-      <nav><Link href="/">Mine</Link><Link href="/?view=stake">Stake</Link><Link className="active" href="/explore">Explore</Link></nav>
+      <nav><Link href="/">Mine</Link><Link href="/?view=stake">Stake</Link><Link className="active" href="/explore">Explore</Link><Link href="/chat">Chat</Link></nav>
       <span className="explore-network"><i /> Sui Testnet</span>
     </header>
 

@@ -8,6 +8,13 @@
       "when": 1788350400000,
       "tag": "0000_wallet_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788440400000,
+      "tag": "0001_chat_messages",
+      "breakpoints": true
     }
   ]
 }

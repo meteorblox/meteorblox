@@ -280,23 +280,38 @@ export default function Home() {
     setNotice("Testnet keeper address copied.");
   }
 
-  function openAccountDrawer() {
+  async function openAccountDrawer() {
     if (!currentAccount) return setConnectOpen(true);
-    const saved = window.localStorage.getItem(`meteorblox:username:${currentAccount.address.toLowerCase()}`) ?? "";
+    let saved = window.localStorage.getItem(`meteorblox:username:${currentAccount.address.toLowerCase()}`) ?? "";
+    try {
+      const response = await fetch(`/api/profile?address=${encodeURIComponent(currentAccount.address)}`, { cache: "no-store" });
+      const profile = await response.json() as { username?: string };
+      if (response.ok) saved = profile.username ?? "";
+    } catch { /* Keep the local fallback if the profile service is temporarily unavailable. */ }
     setUsername(saved);
     setUsernameDraft(saved);
     setLifetimeDeployed(Number(window.localStorage.getItem(`meteorblox:deployed:${currentAccount.address.toLowerCase()}`) ?? "0"));
     setAccountOpen(true);
   }
 
-  function saveUsername() {
+  async function saveUsername() {
     if (!currentAccount) return;
     const cleaned = usernameDraft.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 20);
     if (cleaned.length < 3) return setNotice("Username must contain at least 3 letters, numbers, _ or -.");
-    window.localStorage.setItem(`meteorblox:username:${currentAccount.address.toLowerCase()}`, cleaned);
-    setUsername(cleaned);
-    setUsernameDraft(cleaned);
-    setNotice(`Username saved as ${cleaned}.`);
+    try {
+      setNotice("Confirm the profile name in your wallet.");
+      const message = new TextEncoder().encode(`SLVRBLOX profile\nWallet: ${currentAccount.address.toLowerCase()}\nUsername: ${cleaned}`);
+      const signed = await dAppKit.signPersonalMessage({ message });
+      const response = await fetch("/api/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: currentAccount.address, username: cleaned, bytes: signed.bytes, signature: signed.signature }) });
+      const profile = await response.json() as { username?: string; error?: string };
+      if (!response.ok) throw new Error(profile.error ?? "Username could not be saved");
+      window.localStorage.setItem(`meteorblox:username:${currentAccount.address.toLowerCase()}`, cleaned);
+      setUsername(cleaned);
+      setUsernameDraft(cleaned);
+      setNotice(`Username saved as ${cleaned}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Username save was cancelled.");
+    }
   }
 
   function selectTileCount(requested: number) {
@@ -881,14 +896,21 @@ export default function Home() {
     if (!currentAccount) return setConnectOpen(true);
     const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
+    // Each claim scans the shared refinery positions. Keep wallet transactions
+    // bounded so players with many matured rewards do not exhaust Sui gas.
+    const batchCount = Math.min(count, 4);
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
     const target = `${activePackageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
-    for (let index = 0; index < count; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
-    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} DSLVR...`);
+    for (let index = 0; index < batchCount; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
+    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} ${batchCount} DSLVR position${batchCount === 1 ? "" : "s"}...`);
     try {
       const result = await executeWithSlush(transaction);
-      if (result) { setNotice(`DSLVR ${early ? "withdrawal" : "claim"} confirmed. Transaction: ${result.digest}`); await refreshChainState(); }
+      if (result) {
+        const remaining = Math.max(0, count - batchCount);
+        setNotice(`DSLVR ${early ? "withdrawal" : "claim"} confirmed.${remaining ? ` ${remaining} position${remaining === 1 ? "" : "s"} remain; press the button again.` : ""} Transaction: ${result.digest}`);
+        await refreshChainState();
+      }
     } catch (error) { setNotice(`DSLVR claim failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`); }
     finally { setRoundAction(false); }
   }
@@ -921,7 +943,7 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand slvr-brand" href="#" aria-label="SLVRBLOX home" onClick={() => setView("mine")}><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></a>
-        <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button><button className={view === "stake" ? "active" : ""} onClick={() => setView("stake")}>Stake</button><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link><a href="https://sale.slvrblox.com">Presale</a></nav>
+        <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button><button className={view === "stake" ? "active" : ""} onClick={() => setView("stake")}>Stake</button><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link><Link href="/chat">Chat</Link><a href="https://sale.slvrblox.com">Presale</a></nav>
         <div className="top-actions">
           <div className="protocol-links" aria-label="SLVRBLOX community links">
             <a href="https://x.com/slvrblox" target="_blank" rel="noreferrer" title="SLVRBLOX on X" aria-label="SLVRBLOX on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.77 7.74L23.2 22h-6.24l-4.89-6.39L6.48 22H3.36l7.25-8.29L2.97 2h6.4l4.42 5.84L18.9 2Zm-1.1 17.84h1.73L8.43 4.05H6.58L17.8 19.84Z" /></svg></a>
@@ -1057,7 +1079,7 @@ export default function Home() {
         <button className="account-close" aria-label="Close wallet panel" onClick={() => setAccountOpen(false)}>×</button>
         <div className="account-avatar" aria-hidden="true"><span>M</span><i /></div>
         <p className="eyebrow">CONNECTED WALLET</p><h2 id="account-title">{username || "SLVRBLOX profile"}</h2>
-        <div className="username-editor"><label htmlFor="wallet-username">Username</label><div><input id="wallet-username" value={usernameDraft} maxLength={20} placeholder="Create username" onChange={(event) => setUsernameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") saveUsername(); }} /><button onClick={saveUsername}>Save</button></div><small>3–20 letters, numbers, _ or - · saved on this device</small></div>
+        <div className="username-editor"><label htmlFor="wallet-username">Username</label><div><input id="wallet-username" value={usernameDraft} maxLength={20} placeholder="Create username" onChange={(event) => setUsernameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveUsername(); }} /><button onClick={() => void saveUsername()}>Save</button></div><small>3–20 letters, numbers, _ or - · linked to your wallet and shown on the leaderboard</small></div>
         <dl className="account-details"><div><dt>Address</dt><dd><span>{`${currentAccount.address.slice(0, 8)}...${currentAccount.address.slice(-6)}`}</span><button aria-label="Copy wallet address" onClick={copyAddress}>Copy</button></dd></div><div><dt>Network</dt><dd><span className="account-network"><i /> Sui Testnet</span></dd></div><div><dt>Wallet</dt><dd>{currentWallet?.name ?? "Sui wallet"}</dd></div><div><dt>Keeper · Testnet</dt><dd><span>{`${testnetKeeper.slice(0, 8)}...${testnetKeeper.slice(-6)}`}</span><button aria-label="Copy Testnet keeper address" onClick={copyKeeperAddress}>Copy</button></dd></div></dl>
         <section className="account-portfolio"><h3>Portfolio</h3><dl><div><dt>SUI deployed</dt><dd>{lifetimeDeployed.toFixed(4)} SUI</dd></div><div><dt>DSLVR refined</dt><dd>On-chain</dd></div><div><dt>DSLVR unrefined</dt><dd>On-chain</dd></div><div className="portfolio-total"><dt>Game access</dt><dd>Live Testnet</dd></div></dl></section>
         <a className="account-explorer" href={`https://suiscan.xyz/testnet/account/${currentAccount.address}`} target="_blank" rel="noreferrer">View wallet on SuiScan ↗</a>

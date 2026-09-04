@@ -12,7 +12,7 @@ type Progress = {
   progress: number;
 };
 
-type Tester = { rank: number; address: string; qualifyingRounds: number; activeDays: number; currentLevel: string };
+type Tester = { rank: number; address: string; username: string; qualifyingRounds: number; activeDays: number; currentLevel: string };
 type Leaderboard = { testers: Tester[]; totalTesters: number; updatedAt: string };
 
 function shortAddress(address: string) { return `${address.slice(0, 8)}...${address.slice(-6)}`; }
@@ -39,7 +39,7 @@ function TopTestersLeaderboard() {
       <div className="airdrop-leaderboard-table">
         <div className="airdrop-leaderboard-row head"><span>RANK</span><span>WALLET</span><span>LEVEL</span><span>ROUNDS</span><span>DAYS</span></div>
         {data?.testers.map((tester) => <div className={`airdrop-leaderboard-row rank-${tester.rank}`} key={tester.address}>
-          <strong>#{tester.rank}</strong><code title={tester.address}>{shortAddress(tester.address)}</code><span>{tester.currentLevel}</span><b>{tester.qualifyingRounds}</b><b>{tester.activeDays}</b>
+          <strong>#{tester.rank}</strong><span className="leaderboard-wallet"><b>{tester.username || "Anonymous"}</b><code title={tester.address}>{shortAddress(tester.address)}</code></span><span>{tester.currentLevel}</span><b>{tester.qualifyingRounds}</b><b>{tester.activeDays}</b>
         </div>) ?? <div className="airdrop-leaderboard-loading">Reading verified Testnet activity…</div>}
         {data?.testers.length === 0 && <div className="airdrop-leaderboard-loading">No settled tester activity yet.</div>}
       </div>}

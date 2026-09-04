@@ -16,6 +16,7 @@ const E_INVALID_PLAN: u64 = 2;
 const E_DUPLICATE_TILE: u64 = 3;
 const E_WRONG_FUNDING: u64 = 4;
 const E_PLAN_NOT_FOUND: u64 = 5;
+const E_INVALID_BATCH: u64 = 6;
 
 public struct Registry has key {
     id: UID,
@@ -48,7 +49,7 @@ public struct PlanCancelled has copy, drop { registry: ID, plan_id: u64, owner: 
 
 /// One official shared registry is created after the package upgrade. It is
 /// intentionally permissionless to execute; only a plan owner can cancel.
-public entry fun create_registry(ctx: &mut TxContext) {
+public fun create_registry(ctx: &mut TxContext) {
     let registry = Registry { id: object::new(ctx), plans: vector[], next_plan_id: 1 };
     let id = object::id(&registry);
     transfer::share_object(registry);
@@ -57,13 +58,13 @@ public entry fun create_registry(ctx: &mut TxContext) {
 
 /// Funds every selected tile for every requested future round in one wallet
 /// approval. The exact total is required so no funds can become ambiguous.
-public entry fun create_plan(
+public fun create_plan(
     registry: &mut Registry,
     tiles: vector<u8>,
     amount_per_tile: u64,
     rounds: u64,
     payment: Coin<SUI>,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(!tiles.is_empty() && amount_per_tile > 0 && rounds > 0, E_INVALID_PLAN);
     let mut i = 0;
@@ -97,7 +98,7 @@ public entry fun create_plan(
 }
 
 /// Retained with its original signature for package upgrade compatibility.
-public entry fun execute_round(registry: &mut Registry, game: &mut Game, clock: &Clock) {
+public fun execute_round(registry: &mut Registry, game: &mut Game, clock: &Clock) {
     let current_round = game::round(game);
     let registry_id = object::id(registry);
     let mut index = 0;
@@ -127,7 +128,7 @@ public entry fun execute_round(registry: &mut Registry, game: &mut Game, clock: 
 }
 
 /// Executes each plan on a fresh random set of blocks for the round.
-public entry fun execute_random_round(
+entry fun execute_random_round(
     registry: &mut Registry,
     game: &mut Game,
     random_state: &Random,
@@ -171,7 +172,55 @@ public entry fun execute_random_round(
     };
 }
 
-public entry fun cancel_plan(registry: &mut Registry, plan_id: u64, ctx: &mut TxContext) {
+/// Processes at most max_plans pending or finished plans. Repeated calls are
+/// safe because each plan records the last round in which it was deployed.
+entry fun execute_random_batch(
+    registry: &mut Registry,
+    game: &mut Game,
+    random_state: &Random,
+    clock: &Clock,
+    max_plans: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(max_plans > 0, E_INVALID_BATCH);
+    let current_round = game::round(game);
+    let registry_id = object::id(registry);
+    let mut generator = random::new_generator(random_state, ctx);
+    let mut index = 0;
+    let mut processed = 0;
+    while (index < registry.plans.length() && processed < max_plans) {
+        let plan = registry.plans.borrow_mut(index);
+        let mut did_execute = false;
+        if (plan.active && plan.rounds_remaining > 0 && plan.last_round_played < current_round) {
+            let owner = plan.owner;
+            let plan_id = plan.plan_id;
+            let mut available = vector[];
+            let mut candidate = 0;
+            while (candidate < TILE_COUNT) { available.push_back(candidate); candidate = candidate + 1; };
+            let mut tile_index = 0;
+            while (tile_index < plan.tiles.length()) {
+                let random_index = generator.generate_u64_in_range(0, available.length() - 1);
+                let random_tile = available.swap_remove(random_index);
+                let payment = balance::split(&mut plan.funds, plan.amount_per_tile);
+                game::place_for(game, random_tile, payment, owner, clock);
+                tile_index = tile_index + 1;
+            };
+            plan.rounds_remaining = plan.rounds_remaining - 1;
+            plan.last_round_played = current_round;
+            if (plan.rounds_remaining == 0) plan.active = false;
+            event::emit(PlanExecuted { registry: registry_id, plan_id, owner, round: current_round });
+            processed = processed + 1;
+            did_execute = true;
+        };
+        if (!plan.active) {
+            let Plan { plan_id: _, owner: _, tiles: _, amount_per_tile: _, rounds_remaining: _, last_round_played: _, funds, active: _ } = registry.plans.swap_remove(index);
+            balance::destroy_zero(funds);
+            if (!did_execute) processed = processed + 1;
+        } else { index = index + 1; };
+    };
+}
+
+public fun cancel_plan(registry: &mut Registry, plan_id: u64, ctx: &mut TxContext) {
     let owner = tx_context::sender(ctx);
     let mut index = 0;
     let mut found = false;

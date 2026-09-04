@@ -897,22 +897,32 @@ export default function Home() {
     if (!currentAccount) return setConnectOpen(true);
     const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
-    // Each claim scans the shared refinery positions. Keep wallet transactions
-    // bounded so players with many matured rewards do not exhaust Sui gas.
-    const batchCount = 1;
-    const transaction = new Transaction();
-    transaction.setSender(currentAccount.address); transaction.setGasBudget(200_000_000);
     const target = `${activePackageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
-    for (let index = 0; index < batchCount; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
-    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} ${batchCount} DSLVR position${batchCount === 1 ? "" : "s"}...`);
+    // A refinery claim scans a shared on-chain list, so bundling many claims can
+    // exceed Sui gas. Claim every matured position as its own safe transaction.
+    const claimCount = early ? 1 : count;
+    let completed = 0;
+    let lastDigest = "";
+    setRoundAction(true);
     try {
-      const result = await executeWithSlush(transaction);
-      if (result) {
-        const remaining = Math.max(0, count - batchCount);
-        setNotice(`DSLVR ${early ? "withdrawal" : "claim"} confirmed.${remaining ? ` ${remaining} position${remaining === 1 ? "" : "s"} remain; press the button again.` : ""} Transaction: ${result.digest}`);
-        await refreshChainState();
+      for (let index = 0; index < claimCount; index += 1) {
+        const transaction = new Transaction();
+        transaction.setSender(currentAccount.address); transaction.setGasBudget(200_000_000);
+        transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
+        setNotice(early ? "Waiting for wallet approval to withdraw one unrefined DSLVR position..." : `Approve refined DSLVR claim ${index + 1} of ${claimCount}...`);
+        const result = await executeWithSlush(transaction);
+        if (!result) break;
+        completed += 1;
+        lastDigest = result.digest;
+        setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `Claimed ${completed} of ${claimCount} refined DSLVR positions...`);
       }
-    } catch (error) { setNotice(`DSLVR claim failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`); }
+      if (completed) setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `All ${completed} refined DSLVR positions claimed. Last transaction: ${lastDigest}`);
+      await refreshChainState();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unexpected wallet error";
+      setNotice(completed ? `Claimed ${completed} of ${claimCount} refined DSLVR positions before stopping: ${detail}` : `DSLVR claim failed: ${detail}`);
+      await refreshChainState();
+    }
     finally { setRoundAction(false); }
   }
 
@@ -1017,7 +1027,7 @@ export default function Home() {
       </div> : view === "rewards" ? <section className="rewards-page">
         <div className="rewards-title"><p className="eyebrow">LIVE SUI TESTNET REWARDS</p><h1>Your SUI and DSLVR winnings.</h1><p>Balances below are read from the published Game and Refinery objects. A winning claim sends SUI immediately and starts the DSLVR refining period.</p></div>
         <div className="reward-assets">
-          <article className="claim-card refining-card"><div className="claim-icon asset-claim-icon"><img src="/brand/dslvr-coin.png" alt="DSLVR" /></div><small><span className="dslvr-word">DSLVR</span> REFINERY</small><div className="refinery-balances"><div><span>UNREFINED · CLAIMABLE EARLY</span><strong className="asset-balance"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{(chainState?.unrefinedMtbx ?? 0).toFixed(6)} <span className="dslvr-word">DSLVR</span></strong></div><div><span>REFINED · CLAIMABLE</span><strong className="asset-balance"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{(chainState?.refinedMtbx ?? 0).toFixed(6)} <span className="dslvr-word">DSLVR</span></strong></div></div><div className="refine-time"><span>ALREADY CLAIMED · IN WALLET</span><strong>{(chainState?.walletDslvr ?? 0).toFixed(6)} DSLVR</strong></div><div className="refine-time"><span>Status</span><strong>{(chainState?.unrefinedPositions ?? 0) > 0 ? "Refining gradually · 7 days" : (chainState?.refinedPositions ?? 0) > 0 ? "Ready to claim" : "No active positions"}</strong></div>{(chainState?.unrefinedPositions ?? 0) > 0 && <div className="refine-track" aria-label="Seven-day DSLVR refining period"><i /></div>}<p className="refine-copy"><span className="dslvr-word">DSLVR</span> unlocks continuously over seven days. Claim the refined portion anytime, or withdraw the remainder early with a 10% penalty.</p><button className="deploy" disabled={roundAction || !(chainState?.refinedPositions)} onClick={() => claimMtbx(false)}>Claim refined <span className="dslvr-word">DSLVR</span></button><button className="early-withdraw" disabled={roundAction || !(chainState?.unrefinedPositions)} onClick={() => claimMtbx(true)}>Withdraw unrefined early</button><p className="penalty-copy"><strong>10% penalty</strong> applies only to the unrefined remainder withdrawn early.</p></article>
+          <article className="claim-card refining-card"><div className="claim-icon asset-claim-icon"><img src="/brand/dslvr-coin.png" alt="DSLVR" /></div><small><span className="dslvr-word">DSLVR</span> REFINERY</small><div className="refinery-balances"><div><span>UNREFINED · CLAIMABLE EARLY</span><strong className="asset-balance"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{(chainState?.unrefinedMtbx ?? 0).toFixed(6)} <span className="dslvr-word">DSLVR</span></strong></div><div><span>REFINED · CLAIMABLE</span><strong className="asset-balance"><img src="/brand/dslvr-coin.png" alt="" aria-hidden="true" />{(chainState?.refinedMtbx ?? 0).toFixed(6)} <span className="dslvr-word">DSLVR</span></strong></div></div><div className="refine-time"><span>ALREADY CLAIMED · IN WALLET</span><strong>{(chainState?.walletDslvr ?? 0).toFixed(6)} DSLVR</strong></div><div className="refine-time"><span>Status</span><strong>{(chainState?.unrefinedPositions ?? 0) > 0 ? "Refining gradually · 7 days" : (chainState?.refinedPositions ?? 0) > 0 ? "Ready to claim" : "No active positions"}</strong></div>{(chainState?.unrefinedPositions ?? 0) > 0 && <div className="refine-track" aria-label="Seven-day DSLVR refining period"><i /></div>}<p className="refine-copy"><span className="dslvr-word">DSLVR</span> unlocks continuously over seven days. Claim the refined portion anytime, or withdraw the remainder early with a 10% penalty.</p><button className="deploy" disabled={roundAction || !(chainState?.refinedPositions)} onClick={() => claimMtbx(false)}>Claim all refined <span className="dslvr-word">DSLVR</span>{(chainState?.refinedPositions ?? 0) > 1 ? ` (${chainState?.refinedPositions})` : ""}</button><button className="early-withdraw" disabled={roundAction || !(chainState?.unrefinedPositions)} onClick={() => claimMtbx(true)}>Withdraw unrefined early</button><p className="penalty-copy"><strong>10% penalty</strong> applies only to the unrefined remainder withdrawn early.</p></article>
           <article className="claim-card sui-claim"><div className="claim-icon sui-claim-icon" aria-label="Sui"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5-7.5Z" /></svg></div><small>CLAIMABLE SUI REWARD LEDGER</small><strong className="asset-balance sui-asset-balance"><i className="reward-sui-icon" aria-hidden="true"><svg viewBox="0 0 32 40"><path d="M16 1.8C13.3 5.5 4.2 16.5 4.2 23.9A11.8 11.8 0 0 0 16 35.8a11.8 11.8 0 0 0 11.8-11.9C27.8 16.5 18.7 5.5 16 1.8Zm0 29.6a7.5 7.5 0 0 1-7.5-7.5c0-3.7 4.2-10.2 7.5-14.7 3.3 4.5 7.5 11 7.5 14.7a7.5 7.5 0 0 1-7.5 7.5Z" /></svg></i>{(chainState?.ledgerSui ?? 0).toFixed(6)} SUI</strong><div className="refine-time"><span>WALLET BALANCE · NOT CLAIMABLE REWARDS</span><strong>{(chainState?.walletSui ?? 0).toFixed(6)} SUI</strong></div><span>Claimable rewards are the ledger amount above. The separate wallet balance includes faucet SUI and rewards already claimed.</span><button className="deploy sui-button" disabled={roundAction || !(chainState?.ledgerSui)} onClick={claimLedgerSui}>Claim entire ledger balance</button></article>
         </div>
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}

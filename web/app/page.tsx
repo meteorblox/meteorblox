@@ -896,14 +896,21 @@ export default function Home() {
     if (!currentAccount) return setConnectOpen(true);
     const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
+    // Each claim scans the shared refinery positions. Keep wallet transactions
+    // bounded so players with many matured rewards do not exhaust Sui gas.
+    const batchCount = Math.min(count, 4);
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address); transaction.setGasBudget(50_000_000);
     const target = `${activePackageId}::dslvr::${early ? "claim_early" : "claim_refined"}`;
-    for (let index = 0; index < count; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
-    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} DSLVR...`);
+    for (let index = 0; index < batchCount; index += 1) transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
+    setRoundAction(true); setNotice(`Waiting for wallet approval to ${early ? "withdraw" : "claim"} ${batchCount} DSLVR position${batchCount === 1 ? "" : "s"}...`);
     try {
       const result = await executeWithSlush(transaction);
-      if (result) { setNotice(`DSLVR ${early ? "withdrawal" : "claim"} confirmed. Transaction: ${result.digest}`); await refreshChainState(); }
+      if (result) {
+        const remaining = Math.max(0, count - batchCount);
+        setNotice(`DSLVR ${early ? "withdrawal" : "claim"} confirmed.${remaining ? ` ${remaining} position${remaining === 1 ? "" : "s"} remain; press the button again.` : ""} Transaction: ${result.digest}`);
+        await refreshChainState();
+      }
     } catch (error) { setNotice(`DSLVR claim failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`); }
     finally { setRoundAction(false); }
   }

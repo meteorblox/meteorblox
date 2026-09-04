@@ -1,13 +1,13 @@
 import { fromBase64 } from "@mysten/bcs";
-import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { getProfiles, saveProfile } from "../../../db/profiles";
 
 const addressPattern = /^0x[a-f0-9]{64}$/;
 const usernamePattern = /^[A-Za-z0-9_-]{3,20}$/;
-const suiClient = new SuiJsonRpcClient({
+const suiClient = new SuiGraphQLClient({
   network: "testnet",
-  url: getJsonRpcFullnodeUrl("testnet"),
+  url: "https://graphql.testnet.sui.io/graphql",
 });
 
 export function profileMessage(address: string, username: string) {

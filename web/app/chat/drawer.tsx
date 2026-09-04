@@ -7,6 +7,10 @@ const short = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`;
 export function ChatDrawer() {
   const account = useCurrentAccount(); const kit = useDAppKit(); const bottom = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false); const [messages, setMessages] = useState<Message[]>([]); const [draft, setDraft] = useState(""); const [error, setError] = useState(""); const [posting, setPosting] = useState(false);
+  useEffect(() => {
+    document.body.classList.toggle("chat-drawer-open", open);
+    return () => document.body.classList.remove("chat-drawer-open");
+  }, [open]);
   const refresh = useCallback(async () => { try { const response = await fetch("/api/chat", { cache: "no-store" }); const data = await response.json() as { messages?: Message[]; error?: string }; if (!response.ok) throw new Error(data.error); setMessages(data.messages ?? []); setError(""); } catch (reason) { setError(reason instanceof Error ? reason.message : "Chat unavailable"); } }, []);
   useEffect(() => { if (!open) return; void refresh(); const timer = window.setInterval(() => void refresh(), 12_000); return () => window.clearInterval(timer); }, [open, refresh]);
   useEffect(() => { if (open) requestAnimationFrame(() => bottom.current?.scrollIntoView()); }, [messages, open]);

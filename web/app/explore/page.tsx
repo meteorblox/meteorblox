@@ -8,6 +8,8 @@ type ExploreActivity = {
   packageId: string; indexedEntries: number; indexedMiners: number; indexedDeployedSui: number;
   rounds: Array<{ round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
   motherlodes: Array<{ round: number; winningTile: number; addedDslvr: number; balanceDslvr: number; hit: boolean; transaction: string | null; timestamp: string | null }>;
+  audit: Array<{ round: number; expectedWinnerPoolSui: number; actualWinnerPoolSui: number; treasurySui: number; rewardsSui: number; opsSui: number; paidSui: number; paidDslvr: number; winnerClaims: number; status: "pass" | "mismatch" | "pending" }>;
+  auditSummary: { checked: number; passed: number; mismatches: number; pending: number };
 };
 
 const dateLabel = (timestamp: string | null) => timestamp ? new Date(timestamp).toLocaleString() : "Confirmed";
@@ -72,6 +74,11 @@ export default function ExplorePage() {
         {(activity?.rounds ?? []).map((round) => <div className="activity-row" key={`${round.round}-${round.transaction}`}><strong>#{String(round.round).padStart(6, "0")}</strong><span>Block {round.winningTile}</span><span>{round.deployedSui.toFixed(4)} SUI</span><span>{round.rewardPoolSui.toFixed(4)} SUI</span>{round.transaction ? <a href={`https://testnet.suivision.xyz/txblock/${round.transaction}`} target="_blank" rel="noreferrer" title={dateLabel(round.timestamp)}>View ↗</a> : <span>Confirmed</span>}</div>)}
         {!activity?.rounds.length && <p className="activity-empty">Waiting for the next settlement.</p>}
       </div>
+    </section>
+
+    <section className="accounting-audit"><div className="audit-heading"><div><p>ON-CHAIN ACCOUNTING</p><h2>Round integrity audit</h2><span>Recomputes the 90/5/2/3 SUI allocation and reconciles winner SUI plus the 0.25 DSLVR round reward.</span></div><strong className={(activity?.auditSummary.mismatches ?? 0) ? "audit-bad" : "audit-good"}>{activity ? `${activity.auditSummary.passed}/${activity.auditSummary.checked} verified` : "Checking…"}</strong></div>
+      <div className="audit-table"><div className="audit-row audit-head"><span>ROUND</span><span>WINNER POOL</span><span>FEES 5/2/3</span><span>PAID</span><span>STATUS</span></div>{(activity?.audit ?? []).map((item) => <div className="audit-row" key={item.round}><strong>#{String(item.round).padStart(6, "0")}</strong><span>{item.actualWinnerPoolSui.toFixed(6)} SUI</span><span>{item.treasurySui.toFixed(6)} / {item.rewardsSui.toFixed(6)} / {item.opsSui.toFixed(6)}</span><span>{item.paidSui.toFixed(6)} SUI · {item.paidDslvr.toFixed(6)} DSLVR</span><b className={`audit-${item.status}`}>{item.status === "pass" ? "VERIFIED" : item.status.toUpperCase()}</b></div>)}</div>
+      {!!activity?.auditSummary.pending && <p className="audit-note">Pending means indexed winner events are not yet available; it is not counted as a mismatch.</p>}
     </section>
 
     <section className="diagnostic-card"><div><p>TESTNET SUPPORT</p><h2>Found something wrong?</h2><span>Copy the current round, package, settlement and browser details—never private keys.</span></div><button onClick={() => setReportOpen((open) => !open)}>{reportOpen ? "Close report" : "Report a bug"}</button>{reportOpen && <div className="diagnostic-report"><pre>{diagnosticReport}</pre><div><button onClick={copyReport}>{copied ? "Copied" : "Copy diagnostic report"}</button><a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer">Open Discord ↗</a></div></div>}</section>

@@ -29,7 +29,7 @@ export function ProtocolPage({ eyebrow, title, intro, sections, children }: { ey
           </section>
         ))}
       </article>
-      <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Sui Testnet beta</p><nav><Link href="/whitepaper">Whitepaper</Link><Link href="/roadmap">Roadmap</Link><Link href="/tokenomics">Tokenomics</Link></nav></footer>
+      <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Sui Testnet beta</p><nav><Link href="/whitepaper">Whitepaper</Link><Link href="/roadmap">Roadmap</Link><Link href="/tokenomics">Tokenomics</Link><Link href="/status">Status</Link></nav></footer>
     </main>
   );
 }

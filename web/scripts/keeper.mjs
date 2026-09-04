@@ -14,7 +14,16 @@ const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
 const autoplayGasBudget = Math.max(20_000_000, Number(process.env.AUTOPLAY_GAS_BUDGET ?? 100_000_000));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";
+const keeperLowBalanceMist = 250_000_000n;
+const resendApiKey = process.env.RESEND_API_KEY;
+const alertEmail = process.env.OPS_ALERT_EMAIL;
+const alertFrom = process.env.ALERT_FROM_EMAIL ?? "SLVRBLOX Alerts <alerts@slvrblox.com>";
+const alertCooldownMs = Math.max(300_000, Number(process.env.ALERT_COOLDOWN_MS ?? 21_600_000));
 let lastAutoplayRound = -1n;
+let consecutiveFailures = 0;
+let lowBalanceActive = false;
+let missingAlertConfigLogged = false;
+const lastAlertAt = new Map();
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
 
@@ -24,11 +33,48 @@ console.log(`[keeper] Testnet keeper ${keypair.toSuiAddress()} started (polling 
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function sendAlert(kind, subject, details, force = false) {
+  if (!resendApiKey || !alertEmail) {
+    if (!missingAlertConfigLogged) {
+      console.log("[alerts] Disabled until RESEND_API_KEY and OPS_ALERT_EMAIL are configured.");
+      missingAlertConfigLogged = true;
+    }
+    return;
+  }
+  const lastSent = lastAlertAt.get(kind) ?? 0;
+  if (!force && Date.now() - lastSent < alertCooldownMs) return;
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${resendApiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      from: alertFrom,
+      to: [alertEmail],
+      subject: `[SLVRBLOX Testnet] ${subject}`,
+      text: `${details}\n\nNetwork: Sui Testnet\nKeeper: ${keypair.toSuiAddress()}\nTime: ${new Date().toISOString()}\nStatus: https://www.slvrblox.com/status`,
+    }),
+  });
+  if (!response.ok) {
+    console.error(`[alerts] Email delivery failed (${response.status}); keeper operation will continue.`);
+    return;
+  }
+  lastAlertAt.set(kind, Date.now());
+  console.log(`[alerts] Sent ${kind} notification to ${alertEmail}.`);
+}
+
 async function tick() {
-  const [{ object }, { object: upgradeCapObject }] = await Promise.all([
+  const [{ object }, { object: upgradeCapObject }, keeperBalanceResult] = await Promise.all([
     client.core.getObject({ objectId: gameId, include: { json: true } }),
     client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
+    client.core.getBalance({ owner: keypair.toSuiAddress() }),
   ]);
+  const keeperBalance = BigInt(keeperBalanceResult.balance.balance);
+  if (keeperBalance < keeperLowBalanceMist) {
+    await sendAlert("keeper-low", "Keeper gas is low", `Keeper balance is ${(Number(keeperBalance) / 1_000_000_000).toFixed(4)} SUI. Autoplay and settlement reliability may be affected.`);
+    lowBalanceActive = true;
+  } else if (lowBalanceActive && keeperBalance >= keeperLowBalanceMist * 2n) {
+    await sendAlert("keeper-recovered", "Keeper gas has recovered", `Keeper balance is now ${(Number(keeperBalance) / 1_000_000_000).toFixed(4)} SUI.`, true);
+    lowBalanceActive = false;
+  }
   const game = object.json;
   if (!game) return;
   const packageId = upgradeCapObject.json?.package ?? fallbackPackageId;
@@ -101,8 +147,16 @@ async function tick() {
 while (true) {
   try {
     await tick();
+    if (consecutiveFailures >= 3) await sendAlert("keeper-recovered", "Keeper automation recovered", "The keeper completed a successful monitoring cycle after repeated failures.", true);
+    consecutiveFailures = 0;
   } catch (error) {
-    console.error(`[keeper] ${error instanceof Error ? error.message : String(error)}`);
+    consecutiveFailures += 1;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[keeper] ${message}`);
+    if (consecutiveFailures >= 3) {
+      try { await sendAlert("keeper-failure", "Keeper automation needs attention", `${consecutiveFailures} consecutive keeper cycles failed. Latest error: ${message}`); }
+      catch (alertError) { console.error(`[alerts] ${alertError instanceof Error ? alertError.message : String(alertError)}`); }
+    }
   }
   await wait(pollMs);
 }

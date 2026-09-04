@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type GameStatus = {
   round: number; closesAtMs: number; remainingMs: number; settled: boolean;
-  keeperSui: number; keeperLow: boolean; motherlodeDslvr: number;
+  keeperSui: number; keeperLow: boolean; alertsConfigured: boolean; motherlodeDslvr: number;
   refineryTotals: { awardedDslvr: number; mintedDslvr: number; forfeitedDslvr: number; openPositions: number };
 };
 type ExploreStatus = {
@@ -64,7 +64,7 @@ export default function StatusPage() {
     <section className={`status-banner ${alerts.length ? "warning" : "healthy"}`}><i /> <div><strong>{alerts.length ? "Attention required" : "All monitored systems operational"}</strong><span>{alerts.length ? alerts.join(" · ") : "Round engine, keeper, accounting, refinery, and community chat are responding normally."}</span></div></section>
     <section className="status-grid">
       <article><small>ROUND ENGINE</small><strong>#{String(state.game?.round ?? 0).padStart(6, "0")}</strong><dl><div><dt>State</dt><dd>{state.game?.settled ? "Settled" : "Open"}</dd></div><div><dt>Time remaining</dt><dd>{state.game ? `${Math.ceil(state.game.remainingMs / 1000)}s` : "—"}</dd></div><div><dt>Latest settled</dt><dd>{latest ? `#${latest.round}` : "—"}</dd></div></dl></article>
-      <article><small>KEEPER GAS</small><strong>{state.game ? `${fmt(state.game.keeperSui, 3)} SUI` : "—"}</strong><dl><div><dt>Funding</dt><dd className={state.game?.keeperLow ? "bad" : "good"}>{state.game?.keeperLow ? "Low" : "Healthy"}</dd></div><div><dt>Automation</dt><dd>{state.game ? "Online" : "Unknown"}</dd></div><div><dt>Network</dt><dd>Testnet</dd></div></dl></article>
+      <article><small>KEEPER GAS</small><strong>{state.game ? `${fmt(state.game.keeperSui, 3)} SUI` : "—"}</strong><dl><div><dt>Funding</dt><dd className={state.game?.keeperLow ? "bad" : "good"}>{state.game?.keeperLow ? "Low" : "Healthy"}</dd></div><div><dt>Automation</dt><dd>{state.game ? "Online" : "Unknown"}</dd></div><div><dt>Email alerts</dt><dd className={state.game?.alertsConfigured ? "good" : "bad"}>{state.game?.alertsConfigured ? "Enabled" : "Setup needed"}</dd></div><div><dt>Network</dt><dd>Testnet</dd></div></dl></article>
       <article><small>ACCOUNTING AUDIT</small><strong>{audit ? `${audit.passed}/${audit.checked}` : "—"}</strong><dl><div><dt>Verified</dt><dd className="good">{audit?.passed ?? "—"}</dd></div><div><dt>Mismatches</dt><dd className={audit?.mismatches ? "bad" : "good"}>{audit?.mismatches ?? "—"}</dd></div><div><dt>Pending index</dt><dd>{audit?.pending ?? "—"}</dd></div></dl></article>
       <article><small>DSLVR REFINERY</small><strong>{fmt(outstanding, 3)} DSLVR</strong><dl><div><dt>Awarded</dt><dd>{refinery ? fmt(refinery.awardedDslvr, 3) : "—"}</dd></div><div><dt>Minted</dt><dd>{refinery ? fmt(refinery.mintedDslvr, 3) : "—"}</dd></div><div><dt>Open positions</dt><dd>{refinery?.openPositions ?? "—"}</dd></div></dl></article>
       <article><small>MOTHERLODE</small><strong>{state.game ? fmt(state.game.motherlodeDslvr, 2) : "—"} DSLVR</strong><dl><div><dt>Tracking</dt><dd className={state.game ? "good" : "bad"}>{state.game ? "Online" : "Unavailable"}</dd></div><div><dt>Source</dt><dd>On-chain event</dd></div></dl></article>

@@ -22,8 +22,9 @@ async function recentEvents(eventType: string, pages = 6) {
   return events;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const requestedPlayer = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
     const [settledResult, entryResult, motherlodeResult, winnings] = await Promise.all([
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 25, order: "descending" }),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
@@ -78,6 +79,25 @@ export async function GET() {
         status: poolMatches && payoutsMatch && dslvrMatches ? "pass" : claims.length ? "mismatch" : "pending",
       };
     });
+    const personalByRound = new Map<number, { round: number; tiles: Set<number>; deployed: bigint; winnings: bigint; dslvr: bigint; transaction: string | null; timestamp: string | null }>();
+    if (/^0x[0-9a-f]{64}$/.test(requestedPlayer)) {
+      for (const event of entries) {
+        if (String(event.json?.player ?? "").toLowerCase() !== requestedPlayer) continue;
+        const round = Number(event.json?.round ?? 0);
+        const record = personalByRound.get(round) ?? { round, tiles: new Set<number>(), deployed: 0n, winnings: 0n, dslvr: 0n, transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null };
+        record.tiles.add(Number(event.json?.tile ?? 0) + 1);
+        record.deployed += asBigInt(event.json?.amount);
+        personalByRound.set(round, record);
+      }
+      for (const claim of winnings) {
+        if (String(claim.json?.player ?? "").toLowerCase() !== requestedPlayer) continue;
+        const round = Number(claim.json?.round ?? 0);
+        const record = personalByRound.get(round);
+        if (!record) continue;
+        record.winnings += asBigInt(claim.json?.amount);
+        record.dslvr += asBigInt(claim.json?.dslvr_amount);
+      }
+    }
     return Response.json({
       packageId,
       indexedEntries: entries.length,
@@ -86,6 +106,11 @@ export async function GET() {
       rounds,
       audit,
       auditSummary: { checked: audit.length, passed: audit.filter((item) => item.status === "pass").length, mismatches: audit.filter((item) => item.status === "mismatch").length, pending: audit.filter((item) => item.status === "pending").length },
+      personal: [...personalByRound.values()].sort((a, b) => b.round - a.round).map((record) => ({
+        round: record.round, tiles: [...record.tiles].sort((a, b) => a - b), deployedSui: sui(record.deployed),
+        winningsSui: sui(record.winnings), dslvrWinnings: dslvr(record.dslvr), won: record.winnings > 0n || record.dslvr > 0n,
+        transaction: record.transaction, timestamp: record.timestamp,
+      })),
       motherlodes: (motherlodeResult.events as EventRecord[]).map((event) => ({
         round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.tile ?? 0) + 1,
         addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), hit: Boolean(event.json?.hit),

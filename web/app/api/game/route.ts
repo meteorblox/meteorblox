@@ -140,6 +140,12 @@ export async function GET(request: Request) {
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,
       motherlodeDslvr: mtbx(motherlodeBalance),
+      refineryTotals: {
+        awardedDslvr: mtbx(BigInt(refinery.awarded)),
+        mintedDslvr: mtbx(BigInt(refinery.minted)),
+        forfeitedDslvr: mtbx(BigInt(refinery.forfeited)),
+        openPositions: refinery.positions.filter((position) => !position.claimed).length,
+      },
       autoplayPlans,
       playedTiles,
       lastRound,

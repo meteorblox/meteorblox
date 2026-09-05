@@ -25,12 +25,16 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const alertEmail = process.env.OPS_ALERT_EMAIL;
 const alertFrom = process.env.ALERT_FROM_EMAIL ?? "SLVRBLOX Alerts <alerts@slvrblox.com>";
 const gameWebhookUrl = process.env.DISCORD_GAME_WEBHOOK_URL;
+const communityWebhookUrl = process.env.DISCORD_COMMUNITY_WEBHOOK_URL;
+const communityPostIntervalMs = Math.max(7_200_000, Number(process.env.COMMUNITY_POST_INTERVAL_MS ?? 28_800_000));
 const alertCooldownMs = Math.max(300_000, Number(process.env.ALERT_COOLDOWN_MS ?? 21_600_000));
 let consecutiveFailures = 0;
 let lowBalanceActive = false;
 let missingAlertConfigLogged = false;
 const lastAlertAt = new Map();
 let autoplayExecutedThisTick = false;
+let lastCommunityAttemptAt = 0;
+let communityMemoryState = { lastPostAt: 0, promptIndex: 0 };
 
 const healthDb = process.env.CHAT_DB_PATH ? new DatabaseSync(process.env.CHAT_DB_PATH) : null;
 const healthFile = process.env.CHAT_DB_PATH ? `${process.env.CHAT_DB_PATH}.keeper-health.json` : null;
@@ -41,6 +45,11 @@ healthDb?.exec(`CREATE TABLE IF NOT EXISTS keeper_health (
   last_autoplay_at INTEGER NOT NULL,
   consecutive_failures INTEGER NOT NULL,
   last_error TEXT NOT NULL
+)`);
+healthDb?.exec(`CREATE TABLE IF NOT EXISTS community_bot_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  last_post_at INTEGER NOT NULL,
+  prompt_index INTEGER NOT NULL
 )`);
 const writeHealth = (success, error = "") => {
   const now = Date.now();
@@ -153,6 +162,44 @@ async function announceSettledRound(digest) {
   }
 }
 
+const communityPrompts = [
+  (round) => `⛏️ Miners, which tile are you backing in round **#${round}**?`,
+  () => "💧 What has been your best SLVRBLOX testnet win so far?",
+  () => "🧪 Testnet check-in: found anything we should improve? Drop your feedback here.",
+  () => "💎 Who is hunting the next Motherload hit today?",
+  () => "🏆 Which airdrop participation level are you working toward?",
+  () => "⚙️ Autoplay or manual picks—which mining style do you prefer?",
+];
+
+async function maybePostCommunity(game) {
+  if (!communityWebhookUrl || Date.now() - lastCommunityAttemptAt < 600_000) return;
+  const state = healthDb?.prepare("SELECT last_post_at, prompt_index FROM community_bot_state WHERE id = 1").get();
+  const lastPostAt = Number(state?.last_post_at ?? communityMemoryState.lastPostAt);
+  if (Date.now() - lastPostAt < communityPostIntervalMs) return;
+  lastCommunityAttemptAt = Date.now();
+  const promptIndex = Number(state?.prompt_index ?? communityMemoryState.promptIndex) % communityPrompts.length;
+  try {
+    const response = await fetch(communityWebhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "SLVRBLOX Community",
+        content: communityPrompts[promptIndex](String(game.round ?? "current")),
+        allowed_mentions: { parse: [] },
+      }),
+    });
+    if (!response.ok) throw new Error(`Discord returned ${response.status}`);
+    const now = Date.now();
+    communityMemoryState = { lastPostAt: now, promptIndex: (promptIndex + 1) % communityPrompts.length };
+    healthDb?.prepare(`INSERT INTO community_bot_state (id, last_post_at, prompt_index) VALUES (1, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET last_post_at=excluded.last_post_at, prompt_index=excluded.prompt_index`)
+      .run(now, (promptIndex + 1) % communityPrompts.length);
+    console.log(`[discord] Posted community prompt ${promptIndex + 1}.`);
+  } catch (error) {
+    console.error(`[discord] Community post failed; keeper operation will continue. ${error instanceof Error ? error.message : error}`);
+  }
+}
+
 async function tick() {
   autoplayExecutedThisTick = false;
   const [{ object }, { object: upgradeCapObject }, keeperBalanceResult] = await Promise.all([
@@ -170,6 +217,7 @@ async function tick() {
   }
   const game = object.json;
   if (!game) return;
+  await maybePostCommunity(game);
   const packageId = upgradeCapObject.json?.package ?? fallbackPackageId;
   const packageVersion = Number(upgradeCapObject.json?.version ?? 0);
 

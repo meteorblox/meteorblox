@@ -2,6 +2,7 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { DatabaseSync } from "node:sqlite";
+import { renameSync, writeFileSync } from "node:fs";
 
 const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
@@ -31,6 +32,7 @@ const lastAlertAt = new Map();
 let autoplayExecutedThisTick = false;
 
 const healthDb = process.env.CHAT_DB_PATH ? new DatabaseSync(process.env.CHAT_DB_PATH) : null;
+const healthFile = process.env.CHAT_DB_PATH ? `${process.env.CHAT_DB_PATH}.keeper-health.json` : null;
 healthDb?.exec(`CREATE TABLE IF NOT EXISTS keeper_health (
   id INTEGER PRIMARY KEY,
   updated_at INTEGER NOT NULL,
@@ -40,9 +42,16 @@ healthDb?.exec(`CREATE TABLE IF NOT EXISTS keeper_health (
   last_error TEXT NOT NULL
 )`);
 const writeHealth = (success, error = "") => {
-  if (!healthDb) return;
   const now = Date.now();
-  healthDb.prepare(`INSERT INTO keeper_health
+  const prior = healthDb?.prepare("SELECT last_success_at, last_autoplay_at FROM keeper_health WHERE id = 1").get();
+  const record = {
+    updatedAt: now,
+    lastSuccessAt: success ? now : Number(prior?.last_success_at ?? 0),
+    lastAutoplayAt: autoplayExecutedThisTick ? now : Number(prior?.last_autoplay_at ?? 0),
+    consecutiveFailures,
+    lastError: error.slice(0, 500),
+  };
+  if (healthDb) healthDb.prepare(`INSERT INTO keeper_health
     (id, updated_at, last_success_at, last_autoplay_at, consecutive_failures, last_error)
     VALUES (1, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
@@ -51,7 +60,12 @@ const writeHealth = (success, error = "") => {
       last_autoplay_at = CASE WHEN excluded.last_autoplay_at > 0 THEN excluded.last_autoplay_at ELSE keeper_health.last_autoplay_at END,
       consecutive_failures = excluded.consecutive_failures,
       last_error = excluded.last_error`)
-    .run(now, success ? now : 0, autoplayExecutedThisTick ? now : 0, consecutiveFailures, error.slice(0, 500));
+    .run(now, record.lastSuccessAt, record.lastAutoplayAt, consecutiveFailures, record.lastError);
+  if (healthFile) {
+    const temporary = `${healthFile}.tmp`;
+    writeFileSync(temporary, JSON.stringify(record));
+    renameSync(temporary, healthFile);
+  }
 };
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");

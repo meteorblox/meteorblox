@@ -24,6 +24,7 @@ const keeperLowBalanceMist = 250_000_000n;
 const resendApiKey = process.env.RESEND_API_KEY;
 const alertEmail = process.env.OPS_ALERT_EMAIL;
 const alertFrom = process.env.ALERT_FROM_EMAIL ?? "SLVRBLOX Alerts <alerts@slvrblox.com>";
+const gameWebhookUrl = process.env.DISCORD_GAME_WEBHOOK_URL;
 const alertCooldownMs = Math.max(300_000, Number(process.env.ALERT_COOLDOWN_MS ?? 21_600_000));
 let consecutiveFailures = 0;
 let lowBalanceActive = false;
@@ -102,6 +103,54 @@ async function sendAlert(kind, subject, details, force = false) {
   }
   lastAlertAt.set(kind, Date.now());
   console.log(`[alerts] Sent ${kind} notification to ${alertEmail}.`);
+}
+
+const fromAtomic = (value, decimals) => Number(BigInt(String(value ?? "0"))) / (10 ** decimals);
+const display = (value, maximum = 6) => Number(value).toLocaleString("en-US", { maximumFractionDigits: maximum });
+
+async function announceSettledRound(digest) {
+  if (!gameWebhookUrl) return;
+  try {
+    const transaction = await client.core.getTransaction({ digest, include: { events: true } });
+    const events = transaction.Transaction?.events ?? transaction.FailedTransaction?.events ?? [];
+    const settled = events.find((event) => event.eventType?.endsWith("::game::RoundSettled"));
+    if (!settled?.json) return;
+    const round = Number(settled.json.round ?? 0);
+    const claims = events.filter((event) => event.eventType?.endsWith("::game::WinningsClaimed") && Number(event.json?.round ?? -1) === round);
+    const winners = new Set(claims.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
+    const gross = fromAtomic(settled.json.gross, 9);
+    const winnings = fromAtomic(settled.json.winner_pool, 9);
+    const dslvr = claims.reduce((sum, event) => sum + fromAtomic(event.json?.dslvr_amount, 6), 0);
+    const motherload = events.find((event) => event.eventType?.endsWith("::game::MotherlodeUpdated") && Number(event.json?.round ?? -1) === round);
+    const motherloadHit = Boolean(motherload?.json?.hit);
+    const response = await fetch(gameWebhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "SLVRBLOX Game Activity",
+        embeds: [{
+          title: motherloadHit ? `💎 MOTHERLOAD HIT — Round #${round}` : `Round #${round} settled`,
+          description: `Winning tile **#${Number(settled.json.winning_tile ?? 0) + 1}** · **${winners.size > 1 ? "Split" : "Individual"}** result`,
+          color: motherloadHit ? 10838883 : 7653366,
+          fields: [
+            { name: "Winners", value: String(winners.size || claims.length), inline: true },
+            { name: "Deployed", value: `💧 ${display(gross)} SUI`, inline: true },
+            { name: "Vaulted", value: `💧 ${display(Math.max(0, gross - winnings))} SUI`, inline: true },
+            { name: "Winnings", value: `💧 ${display(winnings)} SUI`, inline: true },
+            { name: "DSLVR rewards", value: display(dslvr), inline: true },
+            ...(motherload ? [{ name: motherloadHit ? "Motherload prize" : "Motherload balance", value: `${display(fromAtomic(motherload.json.balance, 6))} DSLVR`, inline: true }] : []),
+          ],
+          url: `https://suiscan.xyz/testnet/tx/${digest}`,
+          footer: { text: "SLVRBLOX Testnet Game Activity" },
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+    if (!response.ok) console.error(`[discord] Game activity delivery failed (${response.status}); settlement completed normally.`);
+    else console.log(`[discord] Announced settled round ${round}.`);
+  } catch (error) {
+    console.error(`[discord] Could not announce settled round; settlement completed normally. ${error instanceof Error ? error.message : error}`);
+  }
 }
 
 async function tick() {
@@ -197,6 +246,7 @@ async function tick() {
   }
   console.log(`[keeper] Settled occupied round. Transaction: ${result.Transaction.digest}`);
   await client.core.waitForTransaction({ digest: result.Transaction.digest, timeout: 60_000 });
+  await announceSettledRound(result.Transaction.digest);
 }
 
 while (true) {

@@ -9,6 +9,13 @@ export type KeeperHealth = {
 };
 
 export async function getKeeperHealth(): Promise<KeeperHealth | null> {
+  if (typeof process !== "undefined" && process.env.CHAT_DB_PATH) {
+    try {
+      const specifier = ["node", "fs/promises"].join(":");
+      const { readFile } = await import(/* @vite-ignore */ specifier) as { readFile(path: string, encoding: string): Promise<string> };
+      return JSON.parse(await readFile(`${process.env.CHAT_DB_PATH}.keeper-health.json`, "utf8")) as KeeperHealth;
+    } catch { /* The keeper may not have written its first heartbeat yet. */ }
+  }
   const db = await getD1();
   if (!db) return null;
   await db.prepare(`CREATE TABLE IF NOT EXISTS keeper_health (

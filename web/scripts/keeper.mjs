@@ -1,6 +1,7 @@
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
+import { DatabaseSync } from "node:sqlite";
 
 const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
@@ -27,6 +28,31 @@ let consecutiveFailures = 0;
 let lowBalanceActive = false;
 let missingAlertConfigLogged = false;
 const lastAlertAt = new Map();
+let autoplayExecutedThisTick = false;
+
+const healthDb = process.env.CHAT_DB_PATH ? new DatabaseSync(process.env.CHAT_DB_PATH) : null;
+healthDb?.exec(`CREATE TABLE IF NOT EXISTS keeper_health (
+  id INTEGER PRIMARY KEY,
+  updated_at INTEGER NOT NULL,
+  last_success_at INTEGER NOT NULL,
+  last_autoplay_at INTEGER NOT NULL,
+  consecutive_failures INTEGER NOT NULL,
+  last_error TEXT NOT NULL
+)`);
+const writeHealth = (success, error = "") => {
+  if (!healthDb) return;
+  const now = Date.now();
+  healthDb.prepare(`INSERT INTO keeper_health
+    (id, updated_at, last_success_at, last_autoplay_at, consecutive_failures, last_error)
+    VALUES (1, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      updated_at = excluded.updated_at,
+      last_success_at = CASE WHEN excluded.last_success_at > 0 THEN excluded.last_success_at ELSE keeper_health.last_success_at END,
+      last_autoplay_at = CASE WHEN excluded.last_autoplay_at > 0 THEN excluded.last_autoplay_at ELSE keeper_health.last_autoplay_at END,
+      consecutive_failures = excluded.consecutive_failures,
+      last_error = excluded.last_error`)
+    .run(now, success ? now : 0, autoplayExecutedThisTick ? now : 0, consecutiveFailures, error.slice(0, 500));
+};
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
 
@@ -65,6 +91,7 @@ async function sendAlert(kind, subject, details, force = false) {
 }
 
 async function tick() {
+  autoplayExecutedThisTick = false;
   const [{ object }, { object: upgradeCapObject }, keeperBalanceResult] = await Promise.all([
     client.core.getObject({ objectId: gameId, include: { json: true } }),
     client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
@@ -109,6 +136,7 @@ async function tick() {
         throw new Error(autoplayResult.FailedTransaction.status.error?.message ?? "Autoplay execution failed");
       }
       batches += 1;
+      autoplayExecutedThisTick = true;
       console.log(`[keeper] Executed autoplay ${packageVersion >= 9 ? `batch ${batches}` : "plans"} for round ${currentRound}. Transaction: ${autoplayResult.Transaction.digest}`);
       await client.core.waitForTransaction({ digest: autoplayResult.Transaction.digest, timeout: 60_000 });
       if (packageVersion < 9) pending = false;
@@ -162,9 +190,11 @@ while (true) {
     await tick();
     if (consecutiveFailures >= 3) await sendAlert("keeper-recovered", "Keeper automation recovered", "The keeper completed a successful monitoring cycle after repeated failures.", true);
     consecutiveFailures = 0;
+    writeHealth(true);
   } catch (error) {
     consecutiveFailures += 1;
     const message = error instanceof Error ? error.message : String(error);
+    writeHealth(false, message);
     console.error(`[keeper] ${message}`);
     if (consecutiveFailures >= 3) {
       try { await sendAlert("keeper-failure", "Keeper automation needs attention", `${consecutiveFailures} consecutive keeper cycles failed. Latest error: ${message}`); }

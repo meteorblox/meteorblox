@@ -12,7 +12,9 @@ const clockId = "0x6";
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
 const autoplayGasBudget = Math.max(20_000_000, Number(process.env.AUTOPLAY_GAS_BUDGET ?? 100_000_000));
-const autoplayBatchSize = Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 25));
+// Ten plans stays comfortably below the observed Testnet gas ceiling while the
+// loop still drains larger queues through multiple transactions in one round.
+const autoplayBatchSize = Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 10));
 const maxAutoplayBatches = Math.max(1, Number(process.env.MAX_AUTOPLAY_BATCHES ?? 30));
 const secret = process.env.SUI_KEEPER_PRIVATE_KEY;
 const autoplayRegistryId = "0x3a9762f85ef2915f02468627cd33ce3d4b33bbe7d3b31ea15b618a378e18fa3f";

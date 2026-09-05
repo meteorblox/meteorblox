@@ -1,5 +1,6 @@
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
+import { getKeeperHealth } from "../../../db/keeper-health.ts";
 
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
@@ -68,7 +69,7 @@ const decodeTiles = (value: string | number[]) => Array.isArray(value) ? value :
 export async function GET(request: Request) {
   try {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
-    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, motherlodeEvents, walletBalanceResult, walletDslvrBalanceResult, keeperBalanceResult] = await Promise.all([
+    const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, motherlodeEvents, walletBalanceResult, walletDslvrBalanceResult, keeperBalanceResult, keeperHealth] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
       client.core.getObject({ objectId: refineryId, include: { json: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
       address ? client.core.getBalance({ owner: address }).catch(() => null) : Promise.resolve(null),
       address ? client.core.getBalance({ owner: address, coinType: dslvrType }).catch(() => null) : Promise.resolve(null),
       client.core.getBalance({ owner: keeperAddress }).catch(() => null),
+      getKeeperHealth().catch(() => null),
     ]);
     const motherlodeJson = (motherlodeEvents.events[0]?.json ?? null) as MotherlodeUpdatedJson | null;
     const upgradeCap = (upgradeCapObject as { json?: { package?: string } }).json ?? null;
@@ -112,12 +114,16 @@ export async function GET(request: Request) {
     })) : [];
     const activeGlobalPlans = (registry?.plans ?? []).filter((plan) => plan.active && BigInt(plan.rounds_remaining) > 0n);
     const pendingGlobalPlans = activeGlobalPlans.filter((plan) => BigInt(plan.last_round_played) < round);
+    const carriedOverPlans = activeGlobalPlans.filter((plan) => BigInt(plan.last_round_played) + 1n < round);
+    const oldestPlanLag = activeGlobalPlans.reduce((lag, plan) => Math.max(lag, Number(round - BigInt(plan.last_round_played))), 0);
     const globalAutoplay = {
       activePlans: activeGlobalPlans.length,
       pendingPlans: pendingGlobalPlans.length,
       remainingRounds: activeGlobalPlans.reduce((sum, plan) => sum + Number(plan.rounds_remaining), 0),
       batchSize: Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 10)),
       packageVersion: Number((upgradeCap as { version?: string } | null)?.version ?? 0),
+      carriedOverPlans: carriedOverPlans.length,
+      oldestPlanLag,
     };
     const playedTiles = address ? Array.from(new Set(game.entries.filter((entry) =>
       entry.player.toLowerCase() === address && BigInt(entry.round) === round
@@ -149,6 +155,7 @@ export async function GET(request: Request) {
       keeperSui: keeperBalanceResult ? sui(BigInt(keeperBalanceResult.balance.balance)) : 0,
       keeperLow: !keeperBalanceResult || BigInt(keeperBalanceResult.balance.balance) < keeperLowBalanceMist,
       alertsConfigured: Boolean(process.env.RESEND_API_KEY && process.env.OPS_ALERT_EMAIL),
+      keeperHealth,
       motherlodeDslvr: mtbx(motherlodeBalance),
       refineryTotals: {
         awardedDslvr: mtbx(BigInt(refinery.awarded)),

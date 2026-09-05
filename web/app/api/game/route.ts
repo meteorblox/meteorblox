@@ -116,7 +116,7 @@ export async function GET(request: Request) {
       activePlans: activeGlobalPlans.length,
       pendingPlans: pendingGlobalPlans.length,
       remainingRounds: activeGlobalPlans.reduce((sum, plan) => sum + Number(plan.rounds_remaining), 0),
-      batchSize: Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 25)),
+      batchSize: Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 10)),
       packageVersion: Number((upgradeCap as { version?: string } | null)?.version ?? 0),
     };
     const playedTiles = address ? Array.from(new Set(game.entries.filter((entry) =>

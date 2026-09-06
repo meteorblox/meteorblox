@@ -40,10 +40,10 @@ export function LandingPage() {
 
     <section className="landing-hero">
       <div className="landing-orbit" aria-hidden="true"><i /><i /><i /></div>
+      <p className="landing-live"><span /> SUI TESTNET · LIVE</p>
       <div className="landing-coin" aria-hidden="true"><img src="/brand/dslvr-coin.png" alt="" /></div>
       <div className="landing-copy">
-        <p><span /> SUI TESTNET · LIVE</p>
-        <h1>Mine the grid.<br />Claim the <em>load.</em></h1>
+        <h1>Mine the grid.<br />Claim the <em>blox.</em></h1>
         <div className="landing-actions">
           <Link className="landing-primary" href="/mine">Enter the mine <b>→</b></Link>
           <Link className="landing-secondary" href="/whitepaper">Explore the protocol</Link>

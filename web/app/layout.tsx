@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.slvrblox.com"),
-  title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+  title: "SLVRBLOX — Mine the Grid. Claim the Blox.",
   description: "Deploy SUI across the live mining grid, compete for rewards, discover Motherload rounds, and refine DSLVR on Sui.",
   applicationName: "SLVRBLOX",
   keywords: ["SLVRBLOX", "DSLVR", "Sui blockchain game", "Sui mining game", "crypto game", "blockchain gaming", "Sui Testnet", "DSLVR airdrop"],
@@ -32,16 +32,16 @@ export const metadata: Metadata = {
     apple: "/brand/dslvr-coin.png",
   },
   openGraph: {
-    title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+    title: "SLVRBLOX — Mine the Grid. Claim the Blox.",
     description: "A live mining game and community ecosystem built on Sui.",
     url: "https://www.slvrblox.com",
     siteName: "SLVRBLOX",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "SLVRBLOX — Mine the Grid. Claim the Load." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "SLVRBLOX — Mine the Grid. Claim the Blox." }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+    title: "SLVRBLOX — Mine the Grid. Claim the Blox.",
     description: "A live mining game and community ecosystem built on Sui.",
     images: ["/og.png"],
   },

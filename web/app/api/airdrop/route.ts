@@ -22,60 +22,75 @@ export const levels: Level[] = [
 ];
 
 let entryCache: { expiresAt: number; entries: IndexedEntry[] } | null = null;
+let entryLoadPromise: Promise<IndexedEntry[]> | null = null;
+let checkpointLoadPromise: Promise<void> = Promise.resolve();
 const checkpointDayCache = new Map<string, string>();
+
+const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function withRateLimitRetry<T>(operation: () => Promise<T>) {
+  let lastError: unknown;
+  for (const wait of [0, 400, 1_200, 2_500]) {
+    if (wait) await delay(wait);
+    try { return await operation(); }
+    catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/429|too many requests|resource exhausted|rate.?limit/i.test(message)) throw error;
+    }
+  }
+  throw lastError;
+}
 
 async function loadEntryIndex() {
   if (entryCache && entryCache.expiresAt > Date.now()) return entryCache.entries;
-  const entries: IndexedEntry[] = [];
-  let before: string | null = null;
-  let pageCount = 0;
-
-  let historyComplete = false;
-  do {
-    const page = await client.core.listEvents({
-      filter: { eventType: entryEventType },
-      limit: 50,
-      order: "descending",
-      ...(before ? { before } : {}),
-    });
-    for (const event of page.events) {
-      const json = event.json as EntryJson | null;
-      const round = Number(json?.round);
-      const player = json?.player?.toLowerCase();
-      if (player && Number.isSafeInteger(round) && event.checkpoint) entries.push({ player, round, checkpoint: event.checkpoint });
-    }
-    pageCount += 1;
-    if (!page.hasNextPage) { historyComplete = true; break; }
-    if (!page.endCursor || page.endCursor === before) throw new Error("Entry history pagination stalled");
-    before = page.endCursor;
-  } while (pageCount < 1_000);
-
-  if (!historyComplete) throw new Error("Entry history exceeds the safe pagination limit");
-
-  entryCache = { entries, expiresAt: Date.now() + 5 * 60_000 };
-  return entries;
+  if (entryLoadPromise) return entryLoadPromise;
+  entryLoadPromise = (async () => {
+    const entries: IndexedEntry[] = [];
+    let before: string | null = null;
+    let pageCount = 0;
+    let historyComplete = false;
+    do {
+      const page = await withRateLimitRetry(() => client.core.listEvents({ filter: { eventType: entryEventType }, limit: 1_000, order: "descending", ...(before ? { before } : {}) }));
+      for (const event of page.events) {
+        const json = event.json as EntryJson | null;
+        const round = Number(json?.round);
+        const player = json?.player?.toLowerCase();
+        if (player && Number.isSafeInteger(round) && event.checkpoint) entries.push({ player, round, checkpoint: event.checkpoint });
+      }
+      pageCount += 1;
+      if (!page.hasNextPage) { historyComplete = true; break; }
+      if (!page.endCursor || page.endCursor === before) throw new Error("Entry history pagination stalled");
+      before = page.endCursor;
+    } while (pageCount < 1_000);
+    if (!historyComplete) throw new Error("Entry history exceeds the safe pagination limit");
+    entryCache = { entries, expiresAt: Date.now() + 15 * 60_000 };
+    return entries;
+  })().finally(() => { entryLoadPromise = null; });
+  return entryLoadPromise;
 }
 
 async function loadCheckpointDays(checkpoints: string[]) {
   const unique = [...new Set(checkpoints)];
-  const missing = unique.filter((checkpoint) => !checkpointDayCache.has(checkpoint));
-  for (let offset = 0; offset < missing.length; offset += 40) {
-    const batch = missing.slice(offset, offset + 40);
-    const fields = batch.map((checkpoint, index) => `c${index}: checkpoint(sequenceNumber: ${checkpoint}) { timestamp }`).join("\n");
-    const response = await fetch(graphqlUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query: `query CheckpointDates { ${fields} }` }),
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error(`Checkpoint date request failed (${response.status})`);
-    const payload = await response.json() as { data?: Record<string, { timestamp?: string } | null>; errors?: unknown[] };
-    if (!payload.data || payload.errors?.length) throw new Error("Checkpoint dates unavailable");
-    batch.forEach((checkpoint, index) => {
-      const timestamp = payload.data?.[`c${index}`]?.timestamp;
-      if (timestamp) checkpointDayCache.set(checkpoint, timestamp.slice(0, 10));
-    });
-  }
+  const queued = checkpointLoadPromise.then(async () => {
+    const missing = unique.filter((checkpoint) => !checkpointDayCache.has(checkpoint));
+    for (let offset = 0; offset < missing.length; offset += 40) {
+      const batch = missing.slice(offset, offset + 40);
+      const fields = batch.map((checkpoint, index) => `c${index}: checkpoint(sequenceNumber: ${checkpoint}) { timestamp }`).join("\n");
+      const payload = await withRateLimitRetry(async () => {
+        const response = await fetch(graphqlUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: `query CheckpointDates { ${fields} }` }), cache: "no-store" });
+        if (!response.ok) throw new Error(`Checkpoint date request failed (${response.status})`);
+        return response.json() as Promise<{ data?: Record<string, { timestamp?: string } | null>; errors?: unknown[] }>;
+      });
+      if (!payload.data || payload.errors?.length) throw new Error("Checkpoint dates unavailable");
+      batch.forEach((checkpoint, index) => {
+        const timestamp = payload.data?.[`c${index}`]?.timestamp;
+        if (timestamp) checkpointDayCache.set(checkpoint, timestamp.slice(0, 10));
+      });
+    }
+  });
+  checkpointLoadPromise = queued.catch(() => undefined);
+  return queued;
 }
 
 export function settledEntries(entries: IndexedEntry[], game: GameJson) {

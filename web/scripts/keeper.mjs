@@ -15,6 +15,7 @@ const clockId = "0x6";
 const rpcUrl = process.env.SUI_GRPC_URL ?? process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
 const pollMs = Math.max(10_000, Number(process.env.KEEPER_POLL_MS ?? 15_000));
 const autoplayGasBudget = Math.max(20_000_000, Number(process.env.AUTOPLAY_GAS_BUDGET ?? 100_000_000));
+const refineryMigrationBatchSize = Math.max(0, Number(process.env.REFINERY_MIGRATION_BATCH_SIZE ?? 0));
 // Ten plans stays comfortably below the observed Testnet gas ceiling while the
 // loop still drains larger queues through multiple transactions in one round.
 const autoplayBatchSize = Math.max(1, Number(process.env.AUTOPLAY_BATCH_SIZE ?? 10));
@@ -234,10 +235,13 @@ async function maybePostCommunity(game) {
 
 async function tick() {
   autoplayExecutedThisTick = false;
-  const [{ object }, { object: upgradeCapObject }, keeperBalanceResult] = await Promise.all([
+  const [{ object }, { object: upgradeCapObject }, keeperBalanceResult, refineryV2Result] = await Promise.all([
     client.core.getObject({ objectId: gameId, include: { json: true } }),
     client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
     client.core.getBalance({ owner: keypair.toSuiAddress() }),
+    refineryV2Id
+      ? client.core.getObject({ objectId: refineryV2Id, include: { json: true } })
+      : Promise.resolve({ object: null }),
   ]);
   const keeperBalance = BigInt(keeperBalanceResult.balance.balance);
   if (keeperBalance < keeperLowBalanceMist) {
@@ -252,6 +256,26 @@ async function tick() {
   await maybePostCommunity(game);
   const packageId = upgradeCapObject.json?.package ?? fallbackPackageId;
   const packageVersion = Number(upgradeCapObject.json?.version ?? 0);
+
+  if (refineryV2Id && refineryMigrationBatchSize > 0 && !refineryV2Result.object?.json?.migration_complete) {
+    const migrationTx = new Transaction();
+    migrationTx.setSender(keypair.toSuiAddress());
+    migrationTx.setGasBudget(100_000_000);
+    migrationTx.moveCall({
+      target: `${packageId}::dslvr::migrate_to_v2`,
+      arguments: [
+        migrationTx.object(refineryId),
+        migrationTx.object(refineryV2Id),
+        migrationTx.pure.u64(refineryMigrationBatchSize),
+      ],
+    });
+    const migrationResult = await keypair.signAndExecuteTransaction({ transaction: migrationTx, client });
+    if (migrationResult.$kind === "FailedTransaction") {
+      throw new Error(migrationResult.FailedTransaction.status.error?.message ?? "Refinery migration batch failed");
+    }
+    console.log(`[keeper] Migrated up to ${refineryMigrationBatchSize} legacy refinery positions. Transaction: ${migrationResult.Transaction.digest}`);
+    await client.core.waitForTransaction({ digest: migrationResult.Transaction.digest, timeout: 60_000 });
+  }
 
   if (game.settled) return;
 

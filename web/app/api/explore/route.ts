@@ -26,13 +26,13 @@ async function recentEvents(eventType: string, pages = 6) {
 }
 
 async function loadExplore(requestedPlayer: string) {
-    const [settledEvents, entryResult, motherlodeEvents, winnings] = await Promise.all([
+    const [settledEvents, entryEvents, motherlodeEvents, winnings] = await Promise.all([
       recentEvents(`${packageId}::game::RoundSettled`, 3),
-      eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
+      recentEvents(`${packageId}::game::EntryPlaced`),
       recentEvents(`${motherlodePackageId}::game::MotherlodeUpdated`, 3),
       recentEvents(`${packageId}::game::WinningsClaimed`),
     ]);
-    const entries = entryResult.events as EventRecord[];
+    const entries = entryEvents;
     const motherlodeHits = new Set(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map((event) => Number(event.json?.round ?? 0)));
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
     const rounds = settledEvents.map((event) => {

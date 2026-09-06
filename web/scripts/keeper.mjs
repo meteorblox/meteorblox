@@ -25,6 +25,7 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const alertEmail = process.env.OPS_ALERT_EMAIL;
 const alertFrom = process.env.ALERT_FROM_EMAIL ?? "SLVRBLOX Alerts <alerts@slvrblox.com>";
 const gameWebhookUrl = process.env.DISCORD_GAME_WEBHOOK_URL;
+const announcementsWebhookUrl = process.env.DISCORD_ANNOUNCEMENTS_WEBHOOK_URL;
 const communityWebhookUrl = process.env.DISCORD_COMMUNITY_WEBHOOK_URL;
 const communityPostIntervalMs = Math.max(7_200_000, Number(process.env.COMMUNITY_POST_INTERVAL_MS ?? 28_800_000));
 const alertCooldownMs = Math.max(300_000, Number(process.env.ALERT_COOLDOWN_MS ?? 21_600_000));
@@ -132,6 +133,7 @@ async function announceSettledRound(digest) {
     const dslvr = claims.reduce((sum, event) => sum + fromAtomic(event.json?.dslvr_amount, 6), 0);
     const motherload = events.find((event) => event.eventType?.endsWith("::game::MotherlodeUpdated") && Number(event.json?.round ?? -1) === round);
     const motherloadHit = Boolean(motherload?.json?.hit);
+    const motherloadPrize = motherloadHit ? Math.max(0, dslvr - (claims.length * 0.25)) : 0;
     const response = await fetch(gameWebhookUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -147,7 +149,7 @@ async function announceSettledRound(digest) {
             { name: "Vaulted", value: `💧 ${display(Math.max(0, gross - winnings))} SUI`, inline: true },
             { name: "Winnings", value: `💧 ${display(winnings)} SUI`, inline: true },
             { name: "DSLVR rewards", value: display(dslvr), inline: true },
-            ...(motherload ? [{ name: motherloadHit ? "Motherload prize" : "Motherload balance", value: `${display(fromAtomic(motherload.json.balance, 6))} DSLVR`, inline: true }] : []),
+            ...(motherload ? [{ name: motherloadHit ? "Motherload prize" : "Motherload balance", value: `${display(motherloadHit ? motherloadPrize : fromAtomic(motherload.json.balance, 6))} DSLVR`, inline: true }] : []),
           ],
           url: `https://suiscan.xyz/testnet/tx/${digest}`,
           footer: { text: "SLVRBLOX Testnet Game Activity" },
@@ -157,6 +159,35 @@ async function announceSettledRound(digest) {
     });
     if (!response.ok) console.error(`[discord] Game activity delivery failed (${response.status}); settlement completed normally.`);
     else console.log(`[discord] Announced settled round ${round}.`);
+
+    if (motherloadHit && announcementsWebhookUrl) {
+      const announcement = await fetch(announcementsWebhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "SLVRBLOX Announcements",
+          content: "@everyone 💎 **THE MOTHERLOAD HAS HIT!**",
+          allowed_mentions: { parse: ["everyone"] },
+          embeds: [{
+            title: `Motherload hit in round #${round}`,
+            description: `Tile **#${Number(settled.json.winning_tile ?? 0) + 1}** struck the Motherload. **${winners.size || claims.length} winner${(winners.size || claims.length) === 1 ? "" : "s"}** shared the payout.`,
+            color: 10838883,
+            fields: [
+              { name: "Motherload prize", value: `💎 ${display(motherloadPrize)} DSLVR`, inline: true },
+              { name: "SUI winnings", value: `💧 ${display(winnings)} SUI`, inline: true },
+              { name: "Result", value: winners.size > 1 ? "Split" : "Individual", inline: true },
+            ],
+            url: `https://suiscan.xyz/testnet/tx/${digest}`,
+            footer: { text: "SLVRBLOX Testnet · Mine the grid. Claim the blox." },
+            timestamp: new Date().toISOString(),
+          }],
+        }),
+      });
+      if (!announcement.ok) console.error(`[discord] Motherload announcement delivery failed (${announcement.status}); settlement completed normally.`);
+      else console.log(`[discord] Announced Motherload hit for round ${round}.`);
+    } else if (motherloadHit) {
+      console.log("[discord] Motherload hit detected, but DISCORD_ANNOUNCEMENTS_WEBHOOK_URL is not configured.");
+    }
   } catch (error) {
     console.error(`[discord] Could not announce settled round; settlement completed normally. ${error instanceof Error ? error.message : error}`);
   }

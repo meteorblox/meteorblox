@@ -26,17 +26,16 @@ async function recentEvents(eventType: string, pages = 6) {
 }
 
 async function loadExplore(requestedPlayer: string) {
-    const [settledResult, entryResult, motherlodeResult, winnings] = await Promise.all([
-      eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::RoundSettled` }, limit: 25, order: "descending" }),
+    const [settledEvents, entryResult, motherlodeEvents, winnings] = await Promise.all([
+      recentEvents(`${packageId}::game::RoundSettled`, 3),
       eventClient.core.listEvents({ filter: { eventType: `${packageId}::game::EntryPlaced` }, limit: 50, order: "descending" }),
-      eventClient.core.listEvents({ filter: { eventType: `${motherlodePackageId}::game::MotherlodeUpdated` }, limit: 25, order: "descending" }),
+      recentEvents(`${motherlodePackageId}::game::MotherlodeUpdated`, 3),
       recentEvents(`${packageId}::game::WinningsClaimed`),
     ]);
     const entries = entryResult.events as EventRecord[];
-    const motherlodeEvents = motherlodeResult.events as EventRecord[];
     const motherlodeHits = new Set(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map((event) => Number(event.json?.round ?? 0)));
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
-    const rounds = (settledResult.events as EventRecord[]).map((event) => {
+    const rounds = settledEvents.map((event) => {
       const round = Number(event.json?.round ?? 0);
       const gross = asBigInt(event.json?.gross);
       const winnerPool = asBigInt(event.json?.winner_pool);
@@ -60,7 +59,7 @@ async function loadExplore(requestedPlayer: string) {
       };
     });
     const audit = rounds.slice(0, 10).map((round) => {
-      const settled = (settledResult.events as EventRecord[]).find((event) => Number(event.json?.round ?? 0) === round.round);
+      const settled = settledEvents.find((event) => Number(event.json?.round ?? 0) === round.round);
       const gross = asBigInt(settled?.json?.gross);
       const winnerPool = asBigInt(settled?.json?.winner_pool);
       const protocolFee = gross * 1_000n / 10_000n;

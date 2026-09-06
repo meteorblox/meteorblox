@@ -33,6 +33,8 @@ async function loadExplore(requestedPlayer: string) {
       recentEvents(`${packageId}::game::WinningsClaimed`),
     ]);
     const entries = entryResult.events as EventRecord[];
+    const motherlodeEvents = motherlodeResult.events as EventRecord[];
+    const motherlodeHits = new Set(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map((event) => Number(event.json?.round ?? 0)));
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
     const rounds = (settledResult.events as EventRecord[]).map((event) => {
       const round = Number(event.json?.round ?? 0);
@@ -71,7 +73,9 @@ async function loadExplore(requestedPlayer: string) {
       const paidDslvr = claims.reduce((sum, event) => sum + asBigInt(event.json?.dslvr_amount), 0n);
       const poolMatches = winnerPool === expectedWinnerPool;
       const payoutsMatch = claims.length > 0 && paidSui === winnerPool;
-      const dslvrMatches = claims.length > 0 && paidDslvr === 250_000n;
+      // A hit pays the accumulated Motherload in the same WinningsClaimed events
+      // as the normal 0.25 DSLVR round reward.
+      const dslvrMatches = claims.length > 0 && (motherlodeHits.has(round.round) ? paidDslvr >= 250_000n : paidDslvr === 250_000n);
       return {
         round: round.round,
         expectedWinnerPoolSui: sui(expectedWinnerPool), actualWinnerPoolSui: sui(winnerPool),
@@ -112,11 +116,19 @@ async function loadExplore(requestedPlayer: string) {
         winningsSui: sui(record.winnings), dslvrWinnings: dslvr(record.dslvr), won: record.winnings > 0n || record.dslvr > 0n,
         transaction: record.transaction, timestamp: record.timestamp,
       })),
-      motherlodes: (motherlodeResult.events as EventRecord[]).map((event) => ({
-        round: Number(event.json?.round ?? 0), winningTile: Number(event.json?.tile ?? 0) + 1,
-        addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), hit: Boolean(event.json?.hit),
-        transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
-      })),
+      motherlodes: motherlodeEvents.map((event) => {
+        const round = Number(event.json?.round ?? 0);
+        const hit = Boolean(event.json?.hit);
+        const settledRound = rounds.find((item) => item.round === round);
+        // The event balance is deliberately reset to zero after a hit. Derive the
+        // actual payout from winner claims, excluding the regular 0.25 DSLVR reward.
+        const payoutDslvr = hit ? Math.max(0, (settledRound?.dslvrWinnings ?? 0) - 0.25) : 0;
+        return {
+          round, winningTile: Number(event.json?.tile ?? 0) + 1,
+          addedDslvr: dslvr(event.json?.added), balanceDslvr: dslvr(event.json?.balance), payoutDslvr, hit,
+          transaction: event.transactionDigest ?? null, timestamp: event.timestamp ?? null,
+        };
+      }),
     };
 }
 

@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.slvrblox.com"),
   title: "SLVRBLOX — Mine the Grid. Claim the Load.",
   description: "Deploy SUI across the live mining grid, compete for rewards, discover Motherload rounds, and refine DSLVR on Sui.",
+  applicationName: "SLVRBLOX",
+  keywords: ["SLVRBLOX", "DSLVR", "Sui blockchain game", "Sui mining game", "crypto game", "blockchain gaming", "Sui Testnet", "DSLVR airdrop"],
+  authors: [{ name: "SLVRBLOX", url: "https://www.slvrblox.com" }],
+  creator: "SLVRBLOX",
+  publisher: "SLVRBLOX",
+  alternates: { canonical: "/" },
+  category: "technology",
   icons: {
     icon: "/brand/dslvr-coin.png",
     shortcut: "/brand/dslvr-coin.png",
@@ -37,6 +44,11 @@ export const metadata: Metadata = {
     title: "SLVRBLOX — Mine the Grid. Claim the Load.",
     description: "A live mining game and community ecosystem built on Sui.",
     images: ["/og.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
   },
 };
 

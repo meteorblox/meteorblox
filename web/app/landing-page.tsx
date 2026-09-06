@@ -10,7 +10,7 @@ export function LandingPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/game", { cache: "no-store", signal: controller.signal })
+    fetch("/api/landing", { cache: "no-store", signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
       .then((value) => { if (value) setLive(value as LiveState); })
       .catch(() => undefined);

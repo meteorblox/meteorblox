@@ -16,12 +16,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SLVRBLOX",
-  description: "Pick your zone. Strike the grid. Earn DSLVR on Sui.",
+  metadataBase: new URL("https://www.slvrblox.com"),
+  title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+  description: "Deploy SUI across the live mining grid, compete for rewards, discover Motherload rounds, and refine DSLVR on Sui.",
   icons: {
     icon: "/brand/dslvr-coin.png",
     shortcut: "/brand/dslvr-coin.png",
     apple: "/brand/dslvr-coin.png",
+  },
+  openGraph: {
+    title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+    description: "A live mining game and community ecosystem built on Sui.",
+    url: "https://www.slvrblox.com",
+    siteName: "SLVRBLOX",
+    type: "website",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "SLVRBLOX — Mine the Grid. Claim the Load." }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SLVRBLOX — Mine the Grid. Claim the Load.",
+    description: "A live mining game and community ecosystem built on Sui.",
+    images: ["/og.png"],
   },
 };
 

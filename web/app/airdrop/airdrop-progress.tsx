@@ -70,7 +70,7 @@ export function AirdropProgress() {
   return <>
     {!account ? <section className="airdrop-progress-card signed-out" aria-label="Airdrop progress">
       <p>YOUR TESTNET PROGRESS</p><h2>Connect your wallet to view your level.</h2>
-      <span>Progress follows your Sui wallet across devices.</span><Link href="/">Connect on the mining grid →</Link>
+      <span>Progress follows your Sui wallet across devices.</span><Link href="/mine">Connect on the mining grid →</Link>
     </section> : <section className="airdrop-progress-card" aria-label="Airdrop progress">
       <div className="airdrop-progress-heading"><div><p>YOUR TESTNET PROGRESS</p><h2>{data?.currentLevel ?? (error ? "Progress unavailable" : "Reading Sui history…")}</h2></div><code>{shortAddress(account.address)}</code></div>
       {error ? <p className="airdrop-progress-error">{error}. Please refresh in a moment.</p> : <>

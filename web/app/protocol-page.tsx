@@ -14,7 +14,7 @@ export function ProtocolPage({ eyebrow, title, intro, sections, children }: { ey
           <span className="brand-meteor"><i /><b /><em /></span>
           <span className="wordmark"><strong>SLVR</strong><b>BLOX</b></span>
         </Link>
-        <Link className="protocol-back" href="/">Back to the grid</Link>
+        <Link className="protocol-back" href="/mine">Back to the grid</Link>
       </header>
       <article className="protocol-document">
         <p className="protocol-eyebrow">{eyebrow}</p>

@@ -65,7 +65,7 @@ export default function StatusPage() {
   const latest = state.explore?.rounds[0];
 
   return <main className="status-page">
-    <header className="status-topbar"><Link href="/" className="status-brand"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></Link><nav><Link href="/">Mine</Link><Link href="/explore">Explore</Link><Link className="active" href="/status">Status</Link></nav><span><i /> Sui Testnet</span></header>
+    <header className="status-topbar"><Link href="/" className="status-brand"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></Link><nav><Link href="/mine">Mine</Link><Link href="/explore">Explore</Link><Link className="active" href="/status">Status</Link></nav><span><i /> Sui Testnet</span></header>
     <section className="status-heading"><div><p>LIVE OPERATIONS</p><h1>Protocol status</h1><span>Automatic checks refresh every 15 seconds.</span></div><button onClick={() => { setLoading(true); refresh().catch(() => undefined); }}>{loading ? "Checking…" : "Refresh now"}</button></section>
     <section className={`status-banner ${alerts.length ? "warning" : "healthy"}`}><i /> <div><strong>{alerts.length ? "Attention required" : "All monitored systems operational"}</strong><span>{alerts.length ? alerts.join(" · ") : "Round engine, keeper, accounting, refinery, and community chat are responding normally."}</span></div></section>
     <section className="status-grid">
@@ -77,6 +77,6 @@ export default function StatusPage() {
       <article><small>MOTHERLOAD</small><strong>{state.game ? fmt(state.game.motherlodeDslvr, 2) : "—"} DSLVR</strong><dl><div><dt>Tracking</dt><dd className={state.game ? "good" : "bad"}>{state.game ? "Online" : "Unavailable"}</dd></div><div><dt>Source</dt><dd>On-chain event</dd></div></dl></article>
       <article><small>COMMUNITY CHAT</small><strong className={state.chatOnline ? "good" : "bad"}>{state.chatOnline ? "ONLINE" : "OFFLINE"}</strong><dl><div><dt>Wallet verification</dt><dd>{state.chatOnline ? "Ready" : "Unavailable"}</dd></div><div><dt>Storage</dt><dd>{state.chatOnline ? "Connected" : "Unknown"}</dd></div></dl></article>
     </section>
-    <footer className="status-footer"><span>Last checked {state.refreshedAt ? new Date(state.refreshedAt).toLocaleTimeString() : "—"}</span><div><Link href="/readiness">Mainnet readiness →</Link><Link href="/explore">View round audit →</Link><Link href="/">Back to mining →</Link></div></footer>
+    <footer className="status-footer"><span>Last checked {state.refreshedAt ? new Date(state.refreshedAt).toLocaleTimeString() : "—"}</span><div><Link href="/readiness">Mainnet readiness →</Link><Link href="/explore">View round audit →</Link><Link href="/mine">Back to mining →</Link></div></footer>
   </main>;
 }

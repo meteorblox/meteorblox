@@ -57,7 +57,7 @@ export function ChatRoom() {
   }
 
   return <main className="chat-page">
-    <header className="chat-header"><Link href="/" className="chat-brand"><img src="/brand/slvrblox-logo.png" alt="SLVRBLOX" /></Link><nav><Link href="/">Mine</Link><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link></nav><span><i /> Sui Testnet</span></header>
+    <header className="chat-header"><Link href="/" className="chat-brand"><img src="/brand/slvrblox-logo.png" alt="SLVRBLOX" /></Link><nav><Link href="/mine">Mine</Link><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link></nav><span><i /> Sui Testnet</span></header>
     <section className="chat-shell">
       <div className="chat-title"><div><p>WALLET-VERIFIED COMMUNITY</p><h1>Miner Chat</h1><span>Talk strategy, report test results, and meet other SLVRBLOX miners.</span></div><b>{messages.length} recent messages</b></div>
       <div className="chat-feed" aria-live="polite">
@@ -68,7 +68,7 @@ export function ChatRoom() {
         <div ref={bottomRef} />
       </div>
       <form className="chat-composer" onSubmit={postMessage}>
-        {account ? <><div className="chat-identity"><span>Posting as</span><strong>{shortAddress(account.address)}</strong><em>Wallet signature required</em></div><textarea value={draft} maxLength={500} rows={3} placeholder="Write a message to the community…" onChange={(event) => setDraft(event.target.value)} /><div className="chat-actions"><small>{draft.length}/500</small><button disabled={!draft.trim() || posting}>{posting ? "Waiting for approval…" : "Sign & post"}</button></div></> : <div className="chat-locked"><strong>Connect your wallet to join the chat.</strong><span>Reading is public. Posting requires a verified Sui wallet signature.</span><Link href="/">Connect wallet on Mine →</Link></div>}
+        {account ? <><div className="chat-identity"><span>Posting as</span><strong>{shortAddress(account.address)}</strong><em>Wallet signature required</em></div><textarea value={draft} maxLength={500} rows={3} placeholder="Write a message to the community…" onChange={(event) => setDraft(event.target.value)} /><div className="chat-actions"><small>{draft.length}/500</small><button disabled={!draft.trim() || posting}>{posting ? "Waiting for approval…" : "Sign & post"}</button></div></> : <div className="chat-locked"><strong>Connect your wallet to join the chat.</strong><span>Reading is public. Posting requires a verified Sui wallet signature.</span><Link href="/mine">Connect wallet on Mine →</Link></div>}
         {error && <p className="chat-error">{error}</p>}
       </form>
       <p className="chat-rules">Community messages are public. Never share seed phrases, private keys, or personal information. SLVRBLOX staff will never ask for them.</p>

@@ -12,6 +12,7 @@ import { testUsdcPublishData } from "./test-usdc-publish-data";
 import { rehearsalDslvrPublishData } from "./rehearsal-dslvr-publish-data";
 import { rehearsalSalePublishData } from "./rehearsal-sale-publish-data";
 import { walletPreferenceKey } from "./providers";
+import { LandingPage } from "./landing-page";
 
 // This Testnet upgrade prepares player-triggered recovery for expired empty rounds.
 
@@ -62,7 +63,7 @@ type ChainState = {
   lastRound: { round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; mtbxAwarded: number; transaction: string | null } | null;
 };
 
-export default function Home() {
+export function Game() {
   const [view, setView] = useState<"mine" | "rewards" | "stake">("mine");
   const [stakeMode, setStakeMode] = useState<"stake" | "unstake">("stake");
   const [stakeAmount, setStakeAmount] = useState("");
@@ -954,7 +955,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand slvr-brand" href="#" aria-label="SLVRBLOX home" onClick={() => setView("mine")}><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></a>
+        <Link className="brand slvr-brand" href="/" aria-label="SLVRBLOX home"><img src="/brand/slvrblox-logo-trimmed.png" alt="SLVRBLOX" /></Link>
         <nav className="main-nav" aria-label="Main navigation"><button className={view === "mine" ? "active" : ""} onClick={() => setView("mine")}>Mine</button><button className={view === "rewards" ? "active" : ""} onClick={() => setView("rewards")}>Rewards</button><button className={view === "stake" ? "active" : ""} onClick={() => setView("stake")}>Stake</button><Link href="/explore">Explore</Link><Link href="/airdrop">Airdrop</Link><a href="https://sale.slvrblox.com">Presale</a></nav>
         <div className="top-actions">
           <div className="protocol-links" aria-label="SLVRBLOX community links">
@@ -1100,4 +1101,8 @@ export default function Home() {
       </aside></div>}
     </main>
   );
+}
+
+export default function Home() {
+  return <LandingPage />;
 }

@@ -27,6 +27,7 @@ type GameJson = {
 };
 type Position = { owner: string; amount: string; awarded_at_ms: string; matures_at_ms: string; claimed: boolean };
 type RefineryJson = { positions: Position[]; awarded: string; minted: string; forfeited: string };
+type RefineryV2Json = { wallets: { id: { id: { bytes: string } }; size: string }; active_wallets: string; open_positions: string; migration_complete: boolean };
 type LedgerJson = { game: string; credits: Array<{ owner: string; sui: string }> };
 type AutoplayPlanJson = { plan_id: string; owner: string; tiles: string | number[]; amount_per_tile: string; rounds_remaining: string; last_round_played: string; funds: string; active: boolean };
 type AutoplayRegistryJson = { plans: AutoplayPlanJson[]; next_plan_id: string };
@@ -53,6 +54,17 @@ const RefineryBcs = bcs.struct("Refinery", {
   forfeited: bcs.u64(),
   positions: bcs.vector(PositionBcs),
 });
+const TableBcs = bcs.struct("Table", { id: UidBcs, size: bcs.u64() });
+const RefineryV2Bcs = bcs.struct("RefineryV2", {
+  id: UidBcs,
+  refinery_id: IdBcs,
+  reward_cap_id: IdBcs,
+  wallets: TableBcs,
+  active_wallets: bcs.u64(),
+  open_positions: bcs.u64(),
+  migration_complete: bcs.bool(),
+});
+const WalletPositionsBcs = bcs.struct("WalletPositions", { positions: bcs.vector(PositionBcs) });
 
 export function rewardAccounting(
   address: string,
@@ -113,6 +125,25 @@ export async function GET(request: Request) {
     const game = gameObject.json as GameJson;
     if (!refineryObject.content) throw new Error("Refinery data unavailable");
     const refinery = RefineryBcs.parse(refineryObject.content) as RefineryJson;
+    const refineryV2Id = process.env.REFINERY_V2_ID?.trim() ?? "";
+    let refineryV2: RefineryV2Json | null = null;
+    let v2Positions: Position[] = [];
+    if (refineryV2Id) {
+      const { object: v2Object } = await client.core.getObject({ objectId: refineryV2Id, include: { content: true } });
+      if (!v2Object.content) throw new Error("Refinery V2 data unavailable");
+      refineryV2 = RefineryV2Bcs.parse(v2Object.content) as RefineryV2Json;
+      if (address) {
+        try {
+          const { dynamicField } = await client.core.getDynamicField({
+            parentId: refineryV2.wallets.id.id.bytes,
+            name: { type: "address", bcs: bcs.Address.serialize(address).toBytes() },
+          });
+          v2Positions = (WalletPositionsBcs.parse(dynamicField.value.bcs) as { positions: Position[] }).positions;
+        } catch {
+          v2Positions = [];
+        }
+      }
+    }
     const ledger = ledgerObject?.json as LedgerJson | undefined;
     const registry = registryResult.object?.json as AutoplayRegistryJson | undefined;
     const now = Date.now();
@@ -127,8 +158,11 @@ export async function GET(request: Request) {
     const mtbxPool = BigInt(game.dslvr_reward_initial);
     const estimatedSui = winningTotal > 0n ? winnerPool * userWinningStake / winningTotal : 0n;
     const estimatedMtbx = winningTotal > 0n ? mtbxPool * userWinningStake / winningTotal : 0n;
+    const combinedRefinery = { positions: [...refinery.positions, ...v2Positions] };
     const { refinedPositions, unrefinedPositions, refined, unrefined, ledgerCredits, ledgerCreditTotal } =
-      rewardAccounting(address, refinery, ledger, now);
+      rewardAccounting(address, combinedRefinery, ledger, now);
+    const legacyAccounting = rewardAccounting(address, refinery, undefined, now);
+    const v2Accounting = rewardAccounting(address, { positions: v2Positions }, undefined, now);
     const autoplayPlans = address ? (registry?.plans ?? []).filter((plan) =>
       plan.owner.toLowerCase() === address && plan.active && BigInt(plan.rounds_remaining) > 0n
     ).map((plan) => ({
@@ -162,7 +196,7 @@ export async function GET(request: Request) {
     } : null;
 
     return Response.json({
-      packageId, gameId, refineryId, upgradeCapId, ledgerId,
+      packageId, gameId, refineryId, refineryV2Id: refineryV2Id || null, upgradeCapId, ledgerId,
       gameType: (gameObject as { type?: string }).type ?? null,
       refineryType: (refineryObject as { type?: string }).type ?? null,
       upgradeCap,
@@ -174,6 +208,10 @@ export async function GET(request: Request) {
       claimableWinningEntries: userWinningEntries.length, estimatedSuiWinnings: sui(estimatedSui), estimatedMtbxWinnings: mtbx(estimatedMtbx),
       refinedMtbx: mtbx(refined), unrefinedMtbx: mtbx(unrefined), refinedPositions: refinedPositions.length,
       unrefinedPositions: unrefinedPositions.length,
+      legacyRefinedPositions: legacyAccounting.refinedPositions.length,
+      legacyUnrefinedPositions: legacyAccounting.unrefinedPositions.length,
+      v2RefinedPositions: v2Accounting.refinedPositions.length,
+      v2UnrefinedPositions: v2Accounting.unrefinedPositions.length,
       ledgerSui: sui(ledgerCreditTotal), ledgerCreditCount: ledgerCredits.length,
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
       walletDslvr: walletDslvrBalanceResult ? mtbx(BigInt(walletDslvrBalanceResult.balance.balance)) : 0,
@@ -186,7 +224,7 @@ export async function GET(request: Request) {
         awardedDslvr: mtbx(BigInt(refinery.awarded)),
         mintedDslvr: mtbx(BigInt(refinery.minted)),
         forfeitedDslvr: mtbx(BigInt(refinery.forfeited)),
-        openPositions: refinery.positions.filter((position) => !position.claimed).length,
+        openPositions: refineryV2 ? Number(refineryV2.open_positions) : refinery.positions.filter((position) => !position.claimed).length,
       },
       autoplayPlans,
       globalAutoplay,

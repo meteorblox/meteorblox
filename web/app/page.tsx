@@ -51,11 +51,13 @@ const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 
 
 type ChainState = {
   packageId: string;
+  refineryV2Id: string | null;
   upgradeCap: { version?: string } | null;
   round: number; closesAtMs: number; remainingMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
   estimatedSuiWinnings: number; estimatedMtbxWinnings: number; refinedMtbx: number; unrefinedMtbx: number;
   refinedPositions: number; unrefinedPositions: number; nextMaturityMs: number | null;
+  legacyRefinedPositions: number; legacyUnrefinedPositions: number; v2RefinedPositions: number; v2UnrefinedPositions: number;
   ledgerSui: number; ledgerCreditCount: number; walletSui: number; walletDslvr: number; keeperSui: number; keeperLow: boolean;
   motherlodeDslvr: number;
   playedTiles: number[];
@@ -922,30 +924,41 @@ export function Game() {
     const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
     if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
     const supportsClaimAll = Number(chainState?.upgradeCap?.version ?? 0) >= 8;
-    const target = `${activePackageId}::dslvr::${early ? "claim_early" : supportsClaimAll ? "claim_all_refined" : "claim_refined"}`;
-    // A refinery claim scans a shared on-chain list, so bundling many claims can
-    // exceed Sui gas. Claim every matured position as its own safe transaction.
-    const claimCount = early || supportsClaimAll ? 1 : count;
+    const usingV2 = Boolean(chainState?.refineryV2Id);
+    const operations: Array<{ target: string; v2: boolean }> = [];
+    if (usingV2 && early && (chainState?.v2UnrefinedPositions ?? 0) > 0) operations.push({ target: "claim_early_v2", v2: true });
+    else if (early) operations.push({ target: "claim_early", v2: false });
+    if (!early && usingV2 && (chainState?.v2RefinedPositions ?? 0) > 0) operations.push({ target: "claim_all_refined_v2", v2: true });
+    if (!early && (!usingV2 || (chainState?.legacyRefinedPositions ?? 0) > 0)) {
+      const legacyClaims = supportsClaimAll ? 1 : (chainState?.legacyRefinedPositions ?? count);
+      for (let index = 0; index < legacyClaims; index += 1) operations.push({ target: supportsClaimAll ? "claim_all_refined" : "claim_refined", v2: false });
+    }
     let completed = 0;
     let lastDigest = "";
     setRoundAction(true);
     try {
-      for (let index = 0; index < claimCount; index += 1) {
+      for (let index = 0; index < operations.length; index += 1) {
+        const operation = operations[index];
         const transaction = new Transaction();
         transaction.setSender(currentAccount.address); transaction.setGasBudget(200_000_000);
-        transaction.moveCall({ target, arguments: [transaction.object(refineryId), transaction.object(suiClockId)] });
-        setNotice(early ? "Waiting for wallet approval to withdraw one unrefined DSLVR position..." : supportsClaimAll ? "Approve one transaction to claim all currently refined DSLVR..." : `Approve refined DSLVR claim ${index + 1} of ${claimCount}...`);
+        transaction.moveCall({
+          target: `${activePackageId}::dslvr::${operation.target}`,
+          arguments: operation.v2
+            ? [transaction.object(refineryId), transaction.object(chainState!.refineryV2Id!), transaction.object(suiClockId)]
+            : [transaction.object(refineryId), transaction.object(suiClockId)],
+        });
+        setNotice(early ? "Waiting for wallet approval to withdraw one unrefined DSLVR position..." : `Approve refined DSLVR claim ${index + 1} of ${operations.length}...`);
         const result = await executeWithSlush(transaction);
         if (!result) break;
         completed += 1;
         lastDigest = result.digest;
-        setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `Claimed ${completed} of ${claimCount} refined DSLVR positions...`);
+        setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `Completed ${completed} of ${operations.length} refinery claim transactions...`);
       }
-      if (completed) setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : supportsClaimAll ? `All currently refined DSLVR claimed. Transaction: ${lastDigest}` : `All ${completed} refined DSLVR positions claimed. Last transaction: ${lastDigest}`);
+      if (completed) setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `All currently refined DSLVR claimed. Last transaction: ${lastDigest}`);
       await refreshChainState();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unexpected wallet error";
-      setNotice(completed ? `Claimed ${completed} of ${claimCount} refined DSLVR positions before stopping: ${detail}` : `DSLVR claim failed: ${detail}`);
+      setNotice(completed ? `Completed ${completed} refinery claim transactions before stopping: ${detail}` : `DSLVR claim failed: ${detail}`);
       await refreshChainState();
     }
     finally { setRoundAction(false); }
@@ -1059,7 +1072,7 @@ export function Game() {
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         <article className="claim-card testnet-publish"><small>TESTNET ROUND AUTOMATION</small><h2>Idle-round system live</h2><p>Empty rounds pause without keeper transactions. The next player starts a fresh round automatically as part of their play.</p></article>
         {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 10 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Install Refinery V2</h2><p>Upgrades the live Testnet package to wallet-indexed DSLVR refinery storage while preserving existing balances, Motherload behavior, staking, autoplay, and reward accounting.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 10"}</button></article>}
-        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) >= 10 && <article className="claim-card testnet-publish"><small>OWNER REFINERY V2 ACTIVATION</small><h2>Create wallet-indexed refinery</h2><p>Creates the single V2 shared object and permanently directs new DSLVR awards away from the legacy global position list. We will verify its object ID before enabling migration.</p><button className="deploy" disabled={creatingRefineryV2} onClick={createRefineryV2}>{creatingRefineryV2 ? "Waiting for wallet approval..." : "Create Refinery V2 — Testnet"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) >= 10 && !chainState?.refineryV2Id && <article className="claim-card testnet-publish"><small>OWNER REFINERY V2 ACTIVATION</small><h2>Create wallet-indexed refinery</h2><p>Creates the single V2 shared object and permanently directs new DSLVR awards away from the legacy global position list. We will verify its object ID before enabling migration.</p><button className="deploy" disabled={creatingRefineryV2} onClick={createRefineryV2}>{creatingRefineryV2 ? "Waiting for wallet approval..." : "Create Refinery V2 — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}

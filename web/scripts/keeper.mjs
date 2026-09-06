@@ -8,6 +8,7 @@ const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
 const refineryId = "0x15596af5d595d85f7bde4fa9b76b2c04ec30569cf3f8b763f02524ae928f06fa";
+const refineryV2Id = process.env.REFINERY_V2_ID?.trim() || "";
 const ledgerId = "0xc065549eb934c1b628f761d1c1549c8b638bfa3ed6bfda15c129f8d0931b4476";
 const randomId = "0x8";
 const clockId = "0x6";
@@ -315,8 +316,10 @@ async function tick() {
   tx.setSender(keypair.toSuiAddress());
   tx.setGasBudget(20_000_000);
   tx.moveCall({
-    target: `${packageId}::game::settle_and_open_next`,
-    arguments: [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],
+    target: `${packageId}::game::${refineryV2Id ? "settle_and_open_next_v2" : "settle_and_open_next"}`,
+    arguments: refineryV2Id
+      ? [tx.object(gameId), tx.object(refineryId), tx.object(refineryV2Id), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)]
+      : [tx.object(gameId), tx.object(refineryId), tx.object(ledgerId), tx.object(randomId), tx.object(clockId)],
   });
 
   const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });

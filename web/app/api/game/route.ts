@@ -1,5 +1,6 @@
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
+import { bcs } from "@mysten/sui/bcs";
 import { getKeeperHealth } from "../../../db/keeper-health.ts";
 
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
@@ -31,6 +32,27 @@ type AutoplayPlanJson = { plan_id: string; owner: string; tiles: string | number
 type AutoplayRegistryJson = { plans: AutoplayPlanJson[]; next_plan_id: string };
 type RoundSettledJson = { round?: string | number; winning_tile?: string | number; gross?: string; winner_pool?: string };
 type MotherlodeUpdatedJson = { balance?: string | number };
+
+const IdBcs = bcs.struct("ID", { bytes: bcs.Address });
+const UidBcs = bcs.struct("UID", { id: IdBcs });
+const SupplyBcs = bcs.struct("Supply", { value: bcs.u64() });
+const TreasuryCapBcs = bcs.struct("TreasuryCap", { id: UidBcs, total_supply: SupplyBcs });
+const PositionBcs = bcs.struct("UnrefinedPosition", {
+  owner: bcs.Address,
+  amount: bcs.u64(),
+  awarded_at_ms: bcs.u64(),
+  matures_at_ms: bcs.u64(),
+  claimed: bcs.bool(),
+});
+const RefineryBcs = bcs.struct("Refinery", {
+  id: UidBcs,
+  treasury: TreasuryCapBcs,
+  reward_cap_id: IdBcs,
+  awarded: bcs.u64(),
+  minted: bcs.u64(),
+  forfeited: bcs.u64(),
+  positions: bcs.vector(PositionBcs),
+});
 
 export function rewardAccounting(
   address: string,
@@ -71,7 +93,9 @@ export async function GET(request: Request) {
     const address = new URL(request.url).searchParams.get("address")?.toLowerCase() ?? "";
     const [{ object: gameObject }, { object: refineryObject }, { object: upgradeCapObject }, { object: ledgerObject }, registryResult, settledEvents, motherlodeEvents, walletBalanceResult, walletDslvrBalanceResult, keeperBalanceResult, keeperHealth] = await Promise.all([
       client.core.getObject({ objectId: gameId, include: { json: true } }),
-      client.core.getObject({ objectId: refineryId, include: { json: true } }),
+      // The refinery position vector is large enough that public nodes can omit
+      // its JSON representation. BCS remains complete and authoritative.
+      client.core.getObject({ objectId: refineryId, include: { content: true } }),
       client.core.getObject({ objectId: upgradeCapId, include: { json: true } }),
       ledgerId ? client.core.getObject({ objectId: ledgerId, include: { json: true } }) : Promise.resolve({ object: null }),
       autoplayRegistryId ? client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } }) : Promise.resolve({ object: null }),
@@ -87,7 +111,8 @@ export async function GET(request: Request) {
     const packageId = upgradeCap?.package ?? fallbackPackageId;
     const motherlodeBalance = BigInt(motherlodeJson?.balance ?? "0");
     const game = gameObject.json as GameJson;
-    const refinery = refineryObject.json as RefineryJson;
+    if (!refineryObject.content) throw new Error("Refinery data unavailable");
+    const refinery = RefineryBcs.parse(refineryObject.content) as RefineryJson;
     const ledger = ledgerObject?.json as LedgerJson | undefined;
     const registry = registryResult.object?.json as AutoplayRegistryJson | undefined;
     const now = Date.now();

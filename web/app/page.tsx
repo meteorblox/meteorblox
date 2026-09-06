@@ -100,6 +100,7 @@ export function Game() {
   const [publishingPackage, setPublishingPackage] = useState(false);
   const [creatingAutoplayRegistry, setCreatingAutoplayRegistry] = useState(false);
   const [creatingStakingVault, setCreatingStakingVault] = useState(false);
+  const [creatingRefineryV2, setCreatingRefineryV2] = useState(false);
   const [submittingStake, setSubmittingStake] = useState(false);
   const [slushMobileUrl, setSlushMobileUrl] = useState("");
   const [nightlyMobileUrl, setNightlyMobileUrl] = useState("");
@@ -484,7 +485,7 @@ export function Game() {
     if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
-    transaction.setGasBudget(150_000_000);
+    transaction.setGasBudget(200_000_000);
     const cap = transaction.object(upgradeCapId);
     const ticket = transaction.moveCall({
       target: "0x2::package::authorize_upgrade",
@@ -498,10 +499,10 @@ export function Game() {
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
     setUpgradingPackage(true);
-    setNotice("Waiting for the owner wallet to approve the batched-autoplay upgrade...");
+    setNotice("Waiting for the owner wallet to approve the Refinery V2 upgrade...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) { setNotice(`SLVRBLOX batched-autoplay upgrade completed. Transaction: ${result.digest}`); await refreshChainState(); }
+      if (result) { setNotice(`SLVRBLOX Refinery V2 upgrade completed. Transaction: ${result.digest}`); await refreshChainState(); }
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
@@ -630,6 +631,28 @@ export function Game() {
     } catch (error) {
       setNotice(`Clean Testnet publish failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setPublishingPackage(false); }
+  }
+
+  async function createRefineryV2() {
+    if (!currentAccount) return setConnectOpen(true);
+    if (currentAccount.address.toLowerCase() !== testnetOwner) return setNotice("Connect the SLVRBLOX owner wallet.");
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(100_000_000);
+    transaction.moveCall({
+      target: `${activePackageId}::game::create_refinery_v2`,
+      arguments: [transaction.object(gameId), transaction.object(refineryId)],
+    });
+    setCreatingRefineryV2(true);
+    setNotice("Waiting for owner approval to create the wallet-indexed Refinery V2...");
+    try {
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(`Refinery V2 created. Transaction: ${result.digest}`);
+    } catch (error) {
+      setNotice(`Refinery V2 creation failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
+    } finally {
+      setCreatingRefineryV2(false);
+    }
   }
 
   async function publishMockTestUsdc() {
@@ -1035,7 +1058,8 @@ export function Game() {
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         <article className="claim-card testnet-publish"><small>TESTNET ROUND AUTOMATION</small><h2>Idle-round system live</h2><p>Empty rounds pause without keeper transactions. The next player starts a fresh round automatically as part of their play.</p></article>
-        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 9 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Activate batched autoplay</h2><p>The live package is on version {chainState?.upgradeCap?.version ?? "—"}. This upgrade lets the keeper process autoplay plans in bounded groups, preventing one oversized transaction as participation grows. Existing plans, balances, rewards, and registry objects are preserved.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 9"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 10 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Install Refinery V2</h2><p>Upgrades the live Testnet package to wallet-indexed DSLVR refinery storage while preserving existing balances, Motherload behavior, staking, autoplay, and reward accounting.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 10"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) >= 10 && <article className="claim-card testnet-publish"><small>OWNER REFINERY V2 ACTIVATION</small><h2>Create wallet-indexed refinery</h2><p>Creates the single V2 shared object and permanently directs new DSLVR awards away from the legacy global position list. We will verify its object ID before enabling migration.</p><button className="deploy" disabled={creatingRefineryV2} onClick={createRefineryV2}>{creatingRefineryV2 ? "Waiting for wallet approval..." : "Create Refinery V2 — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Mint 20 mock tUSDC</h2><p>Creates exactly 20 valueless Testnet tUSDC for the minimum-size rehearsal purchase. No real USDC is involved.</p><button className="deploy" disabled={roundAction} onClick={mintRehearsalTestUsdc}>{roundAction ? "Waiting for wallet approval..." : "Mint 20 tUSDC — Testnet"}</button></article>}

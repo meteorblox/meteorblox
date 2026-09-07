@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
 
-type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; playedTiles: number[]; settled: boolean };
+type ExploreState = { round: number; potSui: number; motherlodeDslvr: number; playedTiles: number[]; tileTotals: number[]; settled: boolean };
 type ExploreActivity = {
   packageId: string; indexedEntries: number; indexedMiners: number; indexedDeployedSui: number;
   rounds: Array<{ round: number; winningTile: number; winnerType: "split" | "individual" | "pending"; winnerAddress: string | null; winnerCount: number; winningEntries: number; deployedSui: number; vaultedSui: number; winningsSui: number; dslvrWinnings: number; rewardPoolSui: number; transaction: string | null; timestamp: string | null }>;
@@ -68,7 +68,7 @@ export default function ExplorePage() {
 
     <section className="explore-stats">
       <article><h2>Market</h2><dl><div><dt>DSLVR TEST VALUE</dt><dd>$10.00 <small>simulated</small></dd></div><div><dt>NETWORK</dt><dd>Sui Testnet</dd></div><div><dt>STATUS</dt><dd className="status-live">Live beta</dd></div></dl></article>
-      <article><h2>Mining</h2><dl><div><dt>CURRENT ROUND</dt><dd>#{String(data?.round ?? 0).padStart(6, "0")}</dd></div><div><dt>CURRENTLY DEPLOYED</dt><dd>{(data?.potSui ?? 0).toFixed(4)} SUI</dd></div><div><dt>BLOCKS PLAYED</dt><dd>{data?.playedTiles?.length ?? 0} / 25</dd></div></dl></article>
+      <article><h2>Mining</h2><dl><div><dt>CURRENT ROUND</dt><dd>#{String(data?.round ?? 0).padStart(6, "0")}</dd></div><div><dt>CURRENTLY DEPLOYED</dt><dd>{(data?.potSui ?? 0).toFixed(4)} SUI</dd></div><div><dt>CURRENT ROUND BLOCKS</dt><dd>{data?.tileTotals?.filter((amount) => amount > 0).length ?? 0} / 25</dd></div></dl></article>
       <article><h2>Indexed activity</h2><dl><div><dt>ENTRY EVENTS</dt><dd>{activity?.indexedEntries ?? "—"}</dd></div><div><dt>UNIQUE MINERS</dt><dd>{activity?.indexedMiners ?? "—"}</dd></div><div><dt>DEPLOYED IN INDEX</dt><dd>{activity ? `${activity.indexedDeployedSui.toFixed(4)} SUI` : "—"}</dd></div></dl></article>
       <article><h2>Supply</h2><dl><div><dt>MAX DSLVR</dt><dd className="coin-value"><img src="/brand/dslvr-coin.png" alt="" />5,000,000</dd></div><div><dt>CIRCULATING</dt><dd>Testnet</dd></div><div><dt>REFINING</dt><dd>Time locked</dd></div></dl></article>
     </section>

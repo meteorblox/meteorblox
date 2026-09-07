@@ -58,8 +58,8 @@ async function storedMotherloads() {
   const result = await db.prepare(`SELECT round, winning_tile AS winningTile, winner_type AS winnerType,
     winner_address AS winnerAddress, winner_count AS winnerCount, deployed_sui AS deployedSui,
     vaulted_sui AS vaultedSui, winnings_sui AS winningsSui, payout_dslvr AS payoutDslvr,
-    transaction_digest AS transaction, timestamp FROM motherload_history ORDER BY round DESC LIMIT 100`).all<MotherloadHistory>();
-  return (result.results ?? []).map((row) => ({ ...row, hit: true as const }));
+    transaction_digest AS transactionDigest, timestamp FROM motherload_history ORDER BY round DESC LIMIT 100`).all<MotherloadHistory & { transactionDigest: string | null }>();
+  return (result.results ?? []).map((row) => ({ ...row, transaction: row.transactionDigest, hit: true as const }));
 }
 
 async function motherloadFromTransaction(event: EventRecord): Promise<MotherloadHistory | null> {

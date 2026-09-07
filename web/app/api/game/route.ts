@@ -212,6 +212,7 @@ export async function GET(request: Request) {
       legacyUnrefinedPositions: legacyAccounting.unrefinedPositions.length,
       v2RefinedPositions: v2Accounting.refinedPositions.length,
       v2UnrefinedPositions: v2Accounting.unrefinedPositions.length,
+      v2WalletPositions: v2Positions.filter((position) => !position.claimed).length,
       ledgerSui: sui(ledgerCreditTotal), ledgerCreditCount: ledgerCredits.length,
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
       walletDslvr: walletDslvrBalanceResult ? mtbx(BigInt(walletDslvrBalanceResult.balance.balance)) : 0,

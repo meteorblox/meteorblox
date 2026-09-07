@@ -129,7 +129,8 @@ async function loadExplore(requestedPlayer: string) {
       const expectedWinnerPool = gross - protocolFee;
       const treasury = gross * 500n / 10_000n;
       const rewards = gross * 200n / 10_000n;
-      const ops = protocolFee - treasury - rewards;
+      const keeper = gross * 100n / 10_000n;
+      const ops = protocolFee - treasury - rewards - keeper;
       const claims = winnings.filter((event) => Number(event.json?.round ?? 0) === round.round);
       const paidSui = claims.reduce((sum, event) => sum + asBigInt(event.json?.amount), 0n);
       const paidDslvr = claims.reduce((sum, event) => sum + asBigInt(event.json?.dslvr_amount), 0n);
@@ -141,7 +142,7 @@ async function loadExplore(requestedPlayer: string) {
       return {
         round: round.round,
         expectedWinnerPoolSui: sui(expectedWinnerPool), actualWinnerPoolSui: sui(winnerPool),
-        treasurySui: sui(treasury), rewardsSui: sui(rewards), opsSui: sui(ops),
+        treasurySui: sui(treasury), rewardsSui: sui(rewards), opsSui: sui(ops), keeperSui: sui(keeper),
         paidSui: sui(paidSui), paidDslvr: dslvr(paidDslvr), winnerClaims: claims.length,
         status: poolMatches && payoutsMatch && dslvrMatches ? "pass" : claims.length ? "mismatch" : "pending",
       };

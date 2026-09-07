@@ -1,4 +1,5 @@
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
+import { getD1 } from "../../../db/runtime";
 
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
 // Sui event types retain the package version where the struct was introduced.
@@ -9,6 +10,7 @@ const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
 const inFlight = new Map<string, Promise<unknown>>();
 
 type EventRecord = { json?: Record<string, unknown>; timestamp?: string | null; transactionDigest?: string | null };
+type MotherloadHistory = { round: number; winningTile: number; winnerType: string; winnerAddress: string | null; winnerCount: number; deployedSui: number; vaultedSui: number; winningsSui: number; payoutDslvr: number; transaction: string | null; timestamp: string | null; hit: true };
 const sui = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_000_000;
 const dslvr = (value: unknown) => Number(BigInt(String(value ?? "0"))) / 1_000_000;
 const asBigInt = (value: unknown) => BigInt(String(value ?? "0"));
@@ -25,13 +27,74 @@ async function recentEvents(eventType: string, pages = 6) {
   return events;
 }
 
+async function historyDb() {
+  const db = await getD1();
+  if (!db) return null;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS motherload_history (
+    round INTEGER PRIMARY KEY, winning_tile INTEGER NOT NULL, winner_type TEXT NOT NULL,
+    winner_address TEXT, winner_count INTEGER NOT NULL, deployed_sui REAL NOT NULL,
+    vaulted_sui REAL NOT NULL, winnings_sui REAL NOT NULL, payout_dslvr REAL NOT NULL,
+    transaction_digest TEXT, timestamp TEXT
+  )`).run();
+  return db;
+}
+
+async function saveMotherload(record: MotherloadHistory) {
+  const db = await historyDb();
+  if (!db) return;
+  await db.prepare(`INSERT INTO motherload_history
+    (round, winning_tile, winner_type, winner_address, winner_count, deployed_sui, vaulted_sui, winnings_sui, payout_dslvr, transaction_digest, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(round) DO UPDATE SET winning_tile=excluded.winning_tile, winner_type=excluded.winner_type,
+    winner_address=excluded.winner_address, winner_count=excluded.winner_count, deployed_sui=excluded.deployed_sui,
+    vaulted_sui=excluded.vaulted_sui, winnings_sui=excluded.winnings_sui, payout_dslvr=excluded.payout_dslvr,
+    transaction_digest=excluded.transaction_digest, timestamp=excluded.timestamp`)
+    .bind(record.round, record.winningTile, record.winnerType, record.winnerAddress, record.winnerCount, record.deployedSui, record.vaultedSui, record.winningsSui, record.payoutDslvr, record.transaction, record.timestamp).run();
+}
+
+async function storedMotherloads() {
+  const db = await historyDb();
+  if (!db) return [] as MotherloadHistory[];
+  const result = await db.prepare(`SELECT round, winning_tile AS winningTile, winner_type AS winnerType,
+    winner_address AS winnerAddress, winner_count AS winnerCount, deployed_sui AS deployedSui,
+    vaulted_sui AS vaultedSui, winnings_sui AS winningsSui, payout_dslvr AS payoutDslvr,
+    transaction_digest AS transaction, timestamp FROM motherload_history ORDER BY round DESC LIMIT 100`).all<MotherloadHistory>();
+  return (result.results ?? []).map((row) => ({ ...row, hit: true as const }));
+}
+
+async function motherloadFromTransaction(event: EventRecord): Promise<MotherloadHistory | null> {
+  if (!event.transactionDigest) return null;
+  const result = await eventClient.core.getTransaction({ digest: event.transactionDigest, include: { events: true } });
+  const tx = result.Transaction ?? result.FailedTransaction;
+  const events = tx?.events ?? [];
+  const settled = events.find((item) => item.eventType.endsWith("::game::RoundSettled"));
+  if (!settled?.json) return null;
+  const round = Number(event.json?.round ?? settled.json.round ?? 0);
+  const claims = events.filter((item) => item.eventType.endsWith("::game::WinningsClaimed") && Number(item.json?.round ?? 0) === round);
+  const wallets = [...new Set(claims.map((item) => String(item.json?.player ?? "").toLowerCase()).filter(Boolean))];
+  const gross = asBigInt(settled.json.gross);
+  const winnerPool = asBigInt(settled.json.winner_pool);
+  const paidDslvr = claims.reduce((sum, item) => sum + asBigInt(item.json?.dslvr_amount), 0n);
+  return { round, winningTile: Number(settled.json.winning_tile ?? event.json?.tile ?? 0) + 1,
+    winnerType: wallets.length > 1 ? "split" : wallets.length === 1 ? "individual" : "pending",
+    winnerAddress: wallets.length === 1 ? wallets[0] : null, winnerCount: wallets.length,
+    deployedSui: sui(gross), vaultedSui: sui(gross - winnerPool), winningsSui: sui(winnerPool),
+    payoutDslvr: Math.max(0, dslvr(paidDslvr) - 0.25), transaction: event.transactionDigest,
+    timestamp: event.timestamp ?? null, hit: true };
+}
+
 async function loadExplore(requestedPlayer: string) {
+    const existingHistory = await storedMotherloads();
+    const motherloadPages = existingHistory.length ? 3 : 40;
     const [settledEvents, entryEvents, motherlodeEvents, winnings] = await Promise.all([
       recentEvents(`${packageId}::game::RoundSettled`, 3),
       recentEvents(`${packageId}::game::EntryPlaced`),
-      recentEvents(`${motherlodePackageId}::game::MotherlodeUpdated`, 3),
+      recentEvents(`${motherlodePackageId}::game::MotherlodeUpdated`, motherloadPages),
       recentEvents(`${packageId}::game::WinningsClaimed`),
     ]);
+    const indexedHits = await Promise.all(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map(motherloadFromTransaction));
+    await Promise.all(indexedHits.filter((record): record is MotherloadHistory => Boolean(record)).map(saveMotherload));
+    const durableMotherloads = await storedMotherloads();
     const entries = entryEvents;
     const motherlodeHits = new Set(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map((event) => Number(event.json?.round ?? 0)));
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
@@ -115,7 +178,7 @@ async function loadExplore(requestedPlayer: string) {
         winningsSui: sui(record.winnings), dslvrWinnings: dslvr(record.dslvr), won: record.winnings > 0n || record.dslvr > 0n,
         transaction: record.transaction, timestamp: record.timestamp,
       })),
-      motherlodes: motherlodeEvents.map((event) => {
+      motherlodes: durableMotherloads.length ? durableMotherloads : motherlodeEvents.map((event) => {
         const round = Number(event.json?.round ?? 0);
         const hit = Boolean(event.json?.hit);
         const settledRound = rounds.find((item) => item.round === round);

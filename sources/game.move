@@ -4,12 +4,13 @@ use std::option::{Self, Option};
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
+use sui::dynamic_field;
 use sui::event;
 use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
-use slvrblox::dslvr::{Self, Refinery, RewardCap};
+use slvrblox::dslvr::{Self, Refinery, RefineryV2, RewardCap};
 use slvrblox::ledger::{Self, Ledger};
 
 const TILE_COUNT: u8 = 25;
@@ -19,8 +20,12 @@ const PROTOCOL_FEE_BPS: u64 = 1_000;
 /// Five percent of gross entries is reserved for future open-market DSLVR buybacks.
 const TREASURY_BPS: u64 = 500;
 const REWARDS_BPS: u64 = 200;
+/// One percent of gross entries funds the address that successfully settles the round.
+const KEEPER_BPS: u64 = 100;
 /// Each settled round distributes 0.25 unrefined DSLVR across winning stakes.
 const DSLVR_ROUND_REWARD: u64 = 250_000;
+const MOTHERLODE_ROUND_CONTRIBUTION: u64 = 200_000;
+const MOTHERLODE_ODDS: u64 = 500;
 
 const E_NOT_ADMIN: u64 = 1;
 const E_ROUND_CLOSED: u64 = 2;
@@ -34,6 +39,11 @@ const E_CLAIMS_PENDING: u64 = 9;
 const E_REWARDS_NOT_BOUND: u64 = 10;
 const E_REWARDS_ALREADY_BOUND: u64 = 11;
 const E_ROUND_NOT_EMPTY: u64 = 12;
+
+public struct MotherlodeKey has copy, drop, store {}
+public struct MotherlodeState has store {
+    balance: u64,
+}
 public struct LedgerCreated has copy, drop {
     game: ID,
 }
@@ -84,11 +94,25 @@ public struct EmptyRoundClosed has copy, drop {
     round: u64,
 }
 
+public struct MotherlodeUpdated has copy, drop {
+    round: u64,
+    tile: u8,
+    added: u64,
+    balance: u64,
+    hit: bool,
+}
+
 public struct WinningsClaimed has copy, drop {
     player: address,
     round: u64,
     amount: u64,
     dslvr_amount: u64,
+}
+
+public struct KeeperFunded has copy, drop {
+    round: u64,
+    keeper: address,
+    amount: u64,
 }
 
 fun init(ctx: &mut TxContext) {
@@ -137,6 +161,14 @@ public fun create_rewards_ledger(game: &Game, ctx: &mut TxContext) {
     assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
     ledger::create(object::id(game), ctx);
     event::emit(LedgerCreated { game: object::id(game) });
+}
+
+/// Creates the wallet-indexed refinery without creating a second DSLVR mint
+/// authority. This is a one-time, admin-approved migration step.
+public fun create_refinery_v2(game: &Game, refinery: &mut Refinery, ctx: &mut TxContext) {
+    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
+    assert!(option::is_some(&game.reward_cap), E_REWARDS_NOT_BOUND);
+    dslvr::create_and_share_v2(refinery, option::borrow(&game.reward_cap), ctx);
 }
 
 /// Admin opens the first round, or the next round after every winning entry
@@ -253,9 +285,13 @@ entry fun settle(
     let mut fee = balance::split(&mut game.pot, protocol_fee);
     let treasury_amount = mul_div(gross, TREASURY_BPS, BPS);
     let rewards_amount = mul_div(gross, REWARDS_BPS, BPS);
+    let keeper_amount = mul_div(gross, KEEPER_BPS, BPS);
     balance::join(&mut game.treasury, balance::split(&mut fee, treasury_amount));
     balance::join(&mut game.rewards, balance::split(&mut fee, rewards_amount));
+    let keeper = tx_context::sender(ctx);
+    transfer::public_transfer(coin::from_balance(balance::split(&mut fee, keeper_amount), ctx), keeper);
     balance::join(&mut game.ops, fee);
+    event::emit(KeeperFunded { round: game.round, keeper, amount: keeper_amount });
 
     let mut count = 0;
     let mut i = 0;
@@ -307,6 +343,7 @@ entry fun settle_and_open_next(
     let mut generator = random::new_generator(random_state, ctx);
     let occupied_index = generator.generate_u64_in_range(0, occupied.length() - 1);
     let winner = *occupied.borrow(occupied_index);
+    let motherlode_hit = generator.generate_u64_in_range(1, MOTHERLODE_ODDS) == 1;
     let gross = balance::value(&game.pot);
     let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);
     let mut fee = balance::split(&mut game.pot, protocol_fee);
@@ -314,15 +351,29 @@ entry fun settle_and_open_next(
     let rewards_amount = mul_div(gross, REWARDS_BPS, BPS);
     balance::join(&mut game.treasury, balance::split(&mut fee, treasury_amount));
     balance::join(&mut game.rewards, balance::split(&mut fee, rewards_amount));
+    let keeper_amount = mul_div(gross, KEEPER_BPS, BPS);
+    let keeper = tx_context::sender(ctx);
+    transfer::public_transfer(coin::from_balance(balance::split(&mut fee, keeper_amount), ctx), keeper);
     balance::join(&mut game.ops, fee);
+    event::emit(KeeperFunded { round: game.round, keeper, amount: keeper_amount });
 
     let winning_total = *game.tile_totals.borrow(winner as u64);
     let winner_pool = balance::value(&game.pot);
     let capacity = dslvr::remaining_award_capacity(refinery);
     let round_dslvr = if (capacity < DSLVR_ROUND_REWARD) capacity else DSLVR_ROUND_REWARD;
+    let remaining_capacity = capacity - round_dslvr;
+    let added = if (remaining_capacity < MOTHERLODE_ROUND_CONTRIBUTION) remaining_capacity else MOTHERLODE_ROUND_CONTRIBUTION;
+    if (added > 0) dslvr::reserve_for_motherlode(refinery, option::borrow(&game.reward_cap), added);
+    if (!dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+        dynamic_field::add(&mut game.id, MotherlodeKey {}, MotherlodeState { balance: 0 });
+    };
+    let motherlode = dynamic_field::borrow_mut<MotherlodeKey, MotherlodeState>(&mut game.id, MotherlodeKey {});
+    motherlode.balance = motherlode.balance + added;
+    let motherlode_pool = if (motherlode_hit) motherlode.balance else 0;
     let settled_round = game.round;
     let mut sui_remaining = winner_pool;
     let mut dslvr_remaining = round_dslvr;
+    let mut motherlode_remaining = motherlode_pool;
     let mut winning_left = 0u64;
     let mut count_i = 0;
     while (count_i < game.entries.length()) {
@@ -330,12 +381,13 @@ entry fun settle_and_open_next(
         if (entry.round == settled_round && entry.tile == winner) winning_left = winning_left + 1;
         count_i = count_i + 1;
     };
+    let mut motherlode_winners_left = winning_left;
 
     while (!game.entries.is_empty()) {
         let Entry { player, round, tile: entry_tile, stake, claimed: _ } = game.entries.pop_back();
         if (round == settled_round && entry_tile == winner) {
             let sui_amount = if (winning_left == 1) sui_remaining else mul_div(winner_pool, stake, winning_total);
-            let dslvr_amount = if (winning_left == 1) dslvr_remaining else mul_div(round_dslvr, stake, winning_total);
+            let mut dslvr_amount = if (winning_left == 1) dslvr_remaining else mul_div(round_dslvr, stake, winning_total);
             ledger::credit(ledger, player, settled_round, balance::split(&mut game.pot, sui_amount));
             if (dslvr_amount > 0) {
                 dslvr::award_from_game(refinery, option::borrow(&game.reward_cap), player, dslvr_amount, clock);
@@ -343,10 +395,117 @@ entry fun settle_and_open_next(
             sui_remaining = sui_remaining - sui_amount;
             dslvr_remaining = dslvr_remaining - dslvr_amount;
             winning_left = winning_left - 1;
+            if (motherlode_hit) {
+                let motherlode_amount = if (motherlode_winners_left == 1) motherlode_remaining else mul_div(motherlode_pool, stake, winning_total);
+                if (motherlode_amount > 0) {
+                    dslvr::award_reserved_from_motherlode(refinery, option::borrow(&game.reward_cap), player, motherlode_amount, clock);
+                };
+                motherlode_remaining = motherlode_remaining - motherlode_amount;
+                dslvr_amount = dslvr_amount + motherlode_amount;
+                motherlode_winners_left = motherlode_winners_left - 1;
+            };
             event::emit(WinningsClaimed { player, round: settled_round, amount: sui_amount, dslvr_amount });
         };
     };
 
+    if (motherlode_hit) motherlode.balance = 0;
+    event::emit(MotherlodeUpdated { round: settled_round, tile: winner, added, balance: motherlode.balance, hit: motherlode_hit });
+    event::emit(RoundSettled { round: settled_round, winning_tile: winner, gross, winner_pool });
+    reset_and_open(game, clock);
+}
+
+/// V2 settlement writes new DSLVR rewards directly to wallet-indexed storage.
+/// Its SUI accounting and winner selection are identical to the legacy path.
+entry fun settle_and_open_next_v2(
+    game: &mut Game,
+    refinery: &mut Refinery,
+    refinery_v2: &mut RefineryV2,
+    ledger: &mut Ledger,
+    random_state: &Random,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(!game.settled && clock.timestamp_ms() >= game.closes_at_ms, E_ROUND_OPEN);
+    ledger::assert_game(ledger, object::id(game));
+
+    let mut occupied = vector[];
+    let mut tile = 0;
+    while (tile < TILE_COUNT) {
+        if (*game.tile_totals.borrow(tile as u64) > 0) occupied.push_back(tile);
+        tile = tile + 1;
+    };
+    assert!(!occupied.is_empty(), E_WINNER_EMPTY);
+
+    let mut generator = random::new_generator(random_state, ctx);
+    let occupied_index = generator.generate_u64_in_range(0, occupied.length() - 1);
+    let winner = *occupied.borrow(occupied_index);
+    let motherlode_hit = generator.generate_u64_in_range(1, MOTHERLODE_ODDS) == 1;
+    let gross = balance::value(&game.pot);
+    let protocol_fee = mul_div(gross, PROTOCOL_FEE_BPS, BPS);
+    let mut fee = balance::split(&mut game.pot, protocol_fee);
+    let treasury_amount = mul_div(gross, TREASURY_BPS, BPS);
+    let rewards_amount = mul_div(gross, REWARDS_BPS, BPS);
+    balance::join(&mut game.treasury, balance::split(&mut fee, treasury_amount));
+    balance::join(&mut game.rewards, balance::split(&mut fee, rewards_amount));
+    let keeper_amount = mul_div(gross, KEEPER_BPS, BPS);
+    let keeper = tx_context::sender(ctx);
+    transfer::public_transfer(coin::from_balance(balance::split(&mut fee, keeper_amount), ctx), keeper);
+    balance::join(&mut game.ops, fee);
+    event::emit(KeeperFunded { round: game.round, keeper, amount: keeper_amount });
+
+    let winning_total = *game.tile_totals.borrow(winner as u64);
+    let winner_pool = balance::value(&game.pot);
+    let capacity = dslvr::remaining_award_capacity(refinery);
+    let round_dslvr = if (capacity < DSLVR_ROUND_REWARD) capacity else DSLVR_ROUND_REWARD;
+    let remaining_capacity = capacity - round_dslvr;
+    let added = if (remaining_capacity < MOTHERLODE_ROUND_CONTRIBUTION) remaining_capacity else MOTHERLODE_ROUND_CONTRIBUTION;
+    if (added > 0) dslvr::reserve_for_motherlode(refinery, option::borrow(&game.reward_cap), added);
+    if (!dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+        dynamic_field::add(&mut game.id, MotherlodeKey {}, MotherlodeState { balance: 0 });
+    };
+    let motherlode = dynamic_field::borrow_mut<MotherlodeKey, MotherlodeState>(&mut game.id, MotherlodeKey {});
+    motherlode.balance = motherlode.balance + added;
+    let motherlode_pool = if (motherlode_hit) motherlode.balance else 0;
+    let settled_round = game.round;
+    let mut sui_remaining = winner_pool;
+    let mut dslvr_remaining = round_dslvr;
+    let mut motherlode_remaining = motherlode_pool;
+    let mut winning_left = 0u64;
+    let mut count_i = 0;
+    while (count_i < game.entries.length()) {
+        let entry = game.entries.borrow(count_i);
+        if (entry.round == settled_round && entry.tile == winner) winning_left = winning_left + 1;
+        count_i = count_i + 1;
+    };
+    let mut motherlode_winners_left = winning_left;
+
+    while (!game.entries.is_empty()) {
+        let Entry { player, round, tile: entry_tile, stake, claimed: _ } = game.entries.pop_back();
+        if (round == settled_round && entry_tile == winner) {
+            let sui_amount = if (winning_left == 1) sui_remaining else mul_div(winner_pool, stake, winning_total);
+            let mut dslvr_amount = if (winning_left == 1) dslvr_remaining else mul_div(round_dslvr, stake, winning_total);
+            ledger::credit(ledger, player, settled_round, balance::split(&mut game.pot, sui_amount));
+            if (dslvr_amount > 0) {
+                dslvr::award_from_game_v2(refinery, refinery_v2, option::borrow(&game.reward_cap), player, dslvr_amount, clock);
+            };
+            sui_remaining = sui_remaining - sui_amount;
+            dslvr_remaining = dslvr_remaining - dslvr_amount;
+            winning_left = winning_left - 1;
+            if (motherlode_hit) {
+                let motherlode_amount = if (motherlode_winners_left == 1) motherlode_remaining else mul_div(motherlode_pool, stake, winning_total);
+                if (motherlode_amount > 0) {
+                    dslvr::award_reserved_from_motherlode_v2(refinery, refinery_v2, option::borrow(&game.reward_cap), player, motherlode_amount, clock);
+                };
+                motherlode_remaining = motherlode_remaining - motherlode_amount;
+                dslvr_amount = dslvr_amount + motherlode_amount;
+                motherlode_winners_left = motherlode_winners_left - 1;
+            };
+            event::emit(WinningsClaimed { player, round: settled_round, amount: sui_amount, dslvr_amount });
+        };
+    };
+
+    if (motherlode_hit) motherlode.balance = 0;
+    event::emit(MotherlodeUpdated { round: settled_round, tile: winner, added, balance: motherlode.balance, hit: motherlode_hit });
     event::emit(RoundSettled { round: settled_round, winning_tile: winner, gross, winner_pool });
     reset_and_open(game, clock);
 }
@@ -472,7 +631,17 @@ public fun pot(game: &Game): u64 { balance::value(&game.pot) }
 public fun treasury_balance(game: &Game): u64 { balance::value(&game.treasury) }
 public fun rewards_balance(game: &Game): u64 { balance::value(&game.rewards) }
 public fun ops_balance(game: &Game): u64 { balance::value(&game.ops) }
+public fun keeper_bps(): u64 { KEEPER_BPS }
+public fun motherlode_round_contribution(): u64 { MOTHERLODE_ROUND_CONTRIBUTION }
+public fun motherlode_odds(): u64 { MOTHERLODE_ODDS }
 public fun dslvr_round_reward(): u64 { DSLVR_ROUND_REWARD }
+public fun motherlode_balance(game: &Game): u64 {
+    if (dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+        dynamic_field::borrow<MotherlodeKey, MotherlodeState>(&game.id, MotherlodeKey {}).balance
+    } else {
+        0
+    }
+}
 
 fun mul_div(value: u64, numerator: u64, denominator: u64): u64 {
     (((value as u128) * (numerator as u128)) / (denominator as u128)) as u64
@@ -483,6 +652,8 @@ fun test_fee_math() {
     assert!(mul_div(10_000, PROTOCOL_FEE_BPS, BPS) == 1_000, 100);
     assert!(mul_div(10_000, TREASURY_BPS, BPS) == 500, 101);
     assert!(mul_div(10_000, REWARDS_BPS, BPS) == 200, 102);
+    assert!(mul_div(10_000, KEEPER_BPS, BPS) == 100, 103);
+    assert!(TREASURY_BPS + REWARDS_BPS + KEEPER_BPS + 200 == PROTOCOL_FEE_BPS, 104);
 }
 
 #[test]

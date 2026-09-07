@@ -927,7 +927,7 @@ export function Game() {
     const usingV2 = Boolean(chainState?.refineryV2Id);
     const operations: Array<{ target: string; v2: boolean; maxPositions?: number }> = [];
     const supportsBulkEarlyV2 = Number(chainState?.upgradeCap?.version ?? 0) >= 11;
-    const earlyBatchSize = 100;
+    const earlyBatchSize = 1_000;
     if (usingV2 && early && (chainState?.v2UnrefinedPositions ?? 0) > 0) {
       if (supportsBulkEarlyV2) {
         const batches = Math.ceil((chainState?.v2WalletPositions ?? chainState?.v2UnrefinedPositions ?? 1) / earlyBatchSize);

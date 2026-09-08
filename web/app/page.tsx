@@ -115,9 +115,10 @@ export function Game() {
   const wallets = useWallets();
   const connecting = walletConnection.isConnecting;
   const slushWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("slush"));
+  const backpackWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("backpack"));
   const nightlyWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("nightly"));
   const suietWallet = wallets.find((wallet) => wallet.name.toLowerCase().includes("suiet"));
-  const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("nightly") && !wallet.name.toLowerCase().includes("suiet") && !wallet.name.toLowerCase().includes("phantom"));
+  const standardWallets = wallets.filter((wallet) => !wallet.name.toLowerCase().includes("slush") && !wallet.name.toLowerCase().includes("backpack") && !wallet.name.toLowerCase().includes("nightly") && !wallet.name.toLowerCase().includes("suiet") && !wallet.name.toLowerCase().includes("phantom"));
 
   useEffect(() => {
     const userAgent = window.navigator.userAgent;
@@ -1123,10 +1124,11 @@ export function Game() {
 
       {connectOpen && <div className="connect-backdrop" role="presentation" onMouseDown={() => setConnectOpen(false)}><section className="connect-card" role="dialog" aria-modal="true" aria-labelledby="connect-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="connect-close" aria-label="Close sign in" onClick={() => setConnectOpen(false)}>×</button><span className="connect-orbit" aria-hidden="true"><i /></span>
-        <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Choose Slush, Nightly, or Suiet—or connect another compatible Sui wallet.</p>
+        <p className="eyebrow">WELCOME TO SLVRBLOX</p><h2 id="connect-title">Enter the grid.</h2><p className="connect-copy">Choose Slush, Backpack, Nightly, or Suiet—or connect another compatible Sui wallet.</p>
         {slushMobileUrl && <a className="sui-connect wallet-choice wallet-install slush-mobile-choice" href={slushMobileUrl}><span className="sui-wallet-mark">S</span><b>Open SLVRBLOX in Slush app ↗</b></a>}
         <button className="google-connect" disabled={!slushWallet || connecting} onClick={() => slushWallet && connectWallet(slushWallet)}><span className="google-mark">G</span><b>{connecting ? "Connecting…" : "Continue with Google via Slush"}</b></button>
-        <div className="connect-divider"><span>or</span></div>
+          <div className="connect-divider"><span>or</span></div>
+        {backpackWallet ? <button className="sui-connect wallet-choice backpack-choice" onClick={() => connectWallet(backpackWallet)}>{backpackWallet.icon ? <img className="wallet-choice-icon" src={backpackWallet.icon} alt="" /> : <span className="sui-wallet-mark">B</span>}<b>Connect Backpack</b></button> : <a className="sui-connect wallet-choice wallet-install backpack-choice" href="https://backpack.app/download" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">B</span><b>Get Backpack wallet ↗</b></a>}
         {nightlyWallet ? <button className="sui-connect wallet-choice nightly-choice" onClick={() => connectWallet(nightlyWallet)}>{nightlyWallet.icon ? <img className="wallet-choice-icon" src={nightlyWallet.icon} alt="" /> : <span className="sui-wallet-mark">N</span>}<b>Connect Nightly</b></button> : <a className="sui-connect wallet-choice wallet-install nightly-choice" href={nightlyMobileUrl || "https://nightly.app"} target="_blank" rel="noreferrer"><span className="sui-wallet-mark">N</span><b>{nightlyMobileUrl ? "Open SLVRBLOX in Nightly ↗" : "Get Nightly wallet ↗"}</b></a>}
         {suietWallet ? <button className="sui-connect wallet-choice suiet-choice" onClick={() => connectWallet(suietWallet)}>{suietWallet.icon ? <img className="wallet-choice-icon" src={suietWallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect Suiet</b></button> : <a className="sui-connect wallet-choice wallet-install suiet-choice" href="https://suiet.app/install" target="_blank" rel="noreferrer"><span className="sui-wallet-mark">S</span><b>Get Suiet wallet ↗</b></a>}
         {standardWallets.map((wallet) => <button className="sui-connect wallet-choice" key={wallet.name} onClick={() => connectWallet(wallet)}>{wallet.icon ? <img className="wallet-choice-icon" src={wallet.icon} alt="" /> : <span className="sui-wallet-mark">S</span>}<b>Connect {wallet.name}</b></button>)}

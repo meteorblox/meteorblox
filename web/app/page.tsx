@@ -113,7 +113,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
   const [submittingStake, setSubmittingStake] = useState(false);
   const [slushMobileUrl, setSlushMobileUrl] = useState("");
   const [nightlyMobileUrl, setNightlyMobileUrl] = useState("");
-  const [stakingState, setStakingState] = useState({ availableDslvr: 0, userStakedDslvr: 0, totalStakedDslvr: 0, rewardBalanceDslvr: 0, positionCount: 0 });
+  const [stakingState, setStakingState] = useState({ availableDslvr: 0, userStakedDslvr: 0, totalStakedDslvr: 0, rewardBalanceDslvr: 0, positionCount: 0, unlockAtMs: 0 });
   const currentAccount = useCurrentAccount();
   const currentWallet = useCurrentWallet();
   const currentAddress = currentAccount?.address;
@@ -1110,7 +1110,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
             <div className="stake-tabs"><button className={stakeMode === "stake" ? "active" : ""} onClick={() => setStakeMode("stake")}>Stake</button><button className={stakeMode === "unstake" ? "active" : ""} onClick={() => setStakeMode("unstake")}>Unstake</button></div>
             <div className="stake-balance"><span>{stakeMode === "stake" ? "AVAILABLE" : "STAKED"}</span><strong>{(stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6)} DSLVR</strong></div>
             <label htmlFor="stake-amount">Amount</label><div className="stake-input"><input id="stake-amount" inputMode="decimal" placeholder="0.00" value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value.replace(/[^0-9.]/g, ""))} /><span>DSLVR</span><button type="button" onClick={() => setStakeAmount((stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6))}>MAX</button></div>
-            <div className="stake-note"><span>7-day minimum lock</span><span>Adding stake resets the lock</span></div>
+            <div className="stake-note"><span>{stakingState.unlockAtMs > Date.now() ? `Locked until ${new Date(stakingState.unlockAtMs).toLocaleString()}` : "7-day minimum lock"}</span><span>Adding stake resets the lock</span></div>
             <button className="deploy stake-submit" disabled={Number(chainState?.upgradeCap?.version ?? 0) < 13 || submittingStake || !stakeAmount || (stakeMode === "unstake" && stakingState.userStakedDslvr <= 0)} onClick={submitStakeAction}>{Number(chainState?.upgradeCap?.version ?? 0) < 13 ? "Staking upgrade pending" : submittingStake ? "Waiting for wallet approval..." : stakeMode === "stake" ? "Stake DSLVR" : "Unstake DSLVR"}</button>
           </article>
           <button className="claim-yield" disabled>Claim rewards</button>

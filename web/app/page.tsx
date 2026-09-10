@@ -15,7 +15,7 @@ import { rehearsalSalePublishData } from "./rehearsal-sale-publish-data";
 import { walletPreferenceKey } from "./providers";
 import { LandingPage } from "./landing-page";
 
-// This Testnet upgrade prepares player-triggered recovery for expired empty rounds.
+// This Testnet upgrade activates the seven-day staking lock.
 
 const tiles = Array.from({ length: 25 }, (_, index) => index + 1);
 const motherlodeRoundContribution = 0.2;
@@ -509,10 +509,10 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     });
     transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
     setUpgradingPackage(true);
-    setNotice("Waiting for the owner wallet to approve the keeper funding upgrade...");
+    setNotice("Waiting for the owner wallet to approve the seven-day staking-lock upgrade...");
     try {
       const result = await executeWithSlush(transaction);
-      if (result) { setNotice(`SLVRBLOX keeper funding upgrade completed. Transaction: ${result.digest}`); await refreshChainState(); }
+      if (result) { setNotice(`SLVRBLOX staking-lock upgrade completed. Transaction: ${result.digest}`); await refreshChainState(); }
     } catch (error) {
       setNotice(`Testnet upgrade failed: ${error instanceof Error ? error.message : "Unexpected wallet error"}`);
     } finally { setUpgradingPackage(false); }
@@ -585,9 +585,9 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     transaction.setGasBudget(30_000_000);
     if (stakeMode === "stake") {
       const payment = transaction.coin({ type: dslvrCoinType, balance: units });
-      transaction.moveCall({ target: `${activePackageId}::staking::stake`, arguments: [transaction.object(stakingVaultId), payment] });
+      transaction.moveCall({ target: `${activePackageId}::staking::stake_locked`, arguments: [transaction.object(stakingVaultId), payment, transaction.object(suiClockId)] });
     } else {
-      transaction.moveCall({ target: `${activePackageId}::staking::unstake`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units)] });
+      transaction.moveCall({ target: `${activePackageId}::staking::unstake_locked`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units), transaction.object(suiClockId)] });
     }
     setSubmittingStake(true);
     setNotice(`Waiting for wallet approval to ${stakeMode} DSLVR...`);
@@ -1087,7 +1087,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
         {(chainState?.claimableWinningEntries ?? 0) > 0 && <article className="claim-card testnet-publish"><small>WINNING ENTRY READY</small><h2>Claim round #{String(chainState?.round ?? 0).padStart(6, "0")} winnings</h2><p>This credits your settled SUI reward and starts the 24-hour DSLVR refining period.</p><button className="deploy" disabled={roundAction} onClick={claimRoundWinnings}>{roundAction ? "Waiting for Slush approval..." : `Claim ${chainState?.claimableWinningEntries ?? 0} winning ${chainState?.claimableWinningEntries === 1 ? "entry" : "entries"}`}</button></article>}
         {!chainState?.settled && seconds === 0 && <button className="claim-all" disabled={roundAction} onClick={settleRound}>Reveal winning block with Sui randomness</button>}
         <article className="claim-card testnet-publish"><small>TESTNET ROUND AUTOMATION</small><h2>Idle-round system live</h2><p>Empty rounds pause without keeper transactions. The next player starts a fresh round automatically as part of their play.</p></article>
-        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 12 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Install self-funded keeper allocation</h2><p>Routes 1% of every settled round to the successful keeper and leaves 2% for operations, while preserving the 90% winner payout.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 12"}</button></article>}
+        {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) < 13 && <article className="claim-card testnet-publish"><small>OWNER TESTNET UPGRADE</small><h2>Activate the seven-day staking lock</h2><p>Requires every new DSLVR deposit to remain staked for seven days. Adding more stake restarts the wallet&apos;s lock.</p><button className="deploy" disabled={upgradingPackage} onClick={upgradeTestnetPackage}>{upgradingPackage ? "Waiting for wallet approval..." : "Upgrade Testnet package to version 13"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && Number(chainState?.upgradeCap?.version ?? 0) >= 10 && !chainState?.refineryV2Id && <article className="claim-card testnet-publish"><small>OWNER REFINERY V2 ACTIVATION</small><h2>Create wallet-indexed refinery</h2><p>Creates the single V2 shared object and permanently directs new DSLVR awards away from the legacy global position list. We will verify its object ID before enabling migration.</p><button className="deploy" disabled={creatingRefineryV2} onClick={createRefineryV2}>{creatingRefineryV2 ? "Waiting for wallet approval..." : "Create Refinery V2 — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish mock tUSDC</h2><p>Disposable six-decimal payment token for testing the presale flow. It has no value and cannot be used on Mainnet.</p><button className="deploy" disabled={publishingPackage} onClick={publishMockTestUsdc}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Mock tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Publish reduced DSLVR</h2><p>Token and allocation-vault package for the isolated presale rehearsal. This creates disposable Testnet objects only.</p><button className="deploy" disabled={publishingPackage} onClick={publishRehearsalDslvr}>{publishingPackage ? "Waiting for wallet approval..." : "Publish Reduced DSLVR — Testnet"}</button></article>}
@@ -1103,15 +1103,15 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
         {notice && <p className="notice rewards-notice" role="status">{notice}</p>}<p className="disclaimer rewards-disclaimer">Live Sui Testnet state. Test SUI has no monetary value. Contract logic is unaudited and must not be used on Mainnet yet.</p>
         <button className="back-link" onClick={() => { setView("mine"); setNotice(""); }}>Back to mining grid</button>
       </section> : <section className="stake-page">
-        <div className="stake-hero"><p className="eyebrow">TESTNET BETA</p><h1>Stake DSLVR</h1><p>Stake freely. Earn DSLVR rewards.</p></div>
+        <div className="stake-hero"><p className="eyebrow">TESTNET BETA</p><h1>Stake DSLVR</h1><p>Stake for at least seven days. Earn DSLVR rewards.</p></div>
         <div className="stake-simple">
           <div className="stake-summary"><span><small>YOUR STAKE</small><strong>{stakingState.userStakedDslvr.toFixed(6)} DSLVR</strong></span><span><small>VAULT REWARDS</small><strong>{stakingState.rewardBalanceDslvr.toFixed(6)} DSLVR</strong></span></div>
           <article className="stake-card">
             <div className="stake-tabs"><button className={stakeMode === "stake" ? "active" : ""} onClick={() => setStakeMode("stake")}>Stake</button><button className={stakeMode === "unstake" ? "active" : ""} onClick={() => setStakeMode("unstake")}>Unstake</button></div>
             <div className="stake-balance"><span>{stakeMode === "stake" ? "AVAILABLE" : "STAKED"}</span><strong>{(stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6)} DSLVR</strong></div>
             <label htmlFor="stake-amount">Amount</label><div className="stake-input"><input id="stake-amount" inputMode="decimal" placeholder="0.00" value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value.replace(/[^0-9.]/g, ""))} /><span>DSLVR</span><button type="button" onClick={() => setStakeAmount((stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6))}>MAX</button></div>
-            <div className="stake-note"><span>No lockup</span><span>Withdraw anytime</span></div>
-            <button className="deploy stake-submit" disabled={submittingStake || !stakeAmount || (stakeMode === "unstake" && stakingState.userStakedDslvr <= 0)} onClick={submitStakeAction}>{submittingStake ? "Waiting for wallet approval..." : stakeMode === "stake" ? "Stake DSLVR" : "Unstake DSLVR"}</button>
+            <div className="stake-note"><span>7-day minimum lock</span><span>Adding stake resets the lock</span></div>
+            <button className="deploy stake-submit" disabled={Number(chainState?.upgradeCap?.version ?? 0) < 13 || submittingStake || !stakeAmount || (stakeMode === "unstake" && stakingState.userStakedDslvr <= 0)} onClick={submitStakeAction}>{Number(chainState?.upgradeCap?.version ?? 0) < 13 ? "Staking upgrade pending" : submittingStake ? "Waiting for wallet approval..." : stakeMode === "stake" ? "Stake DSLVR" : "Unstake DSLVR"}</button>
           </article>
           <button className="claim-yield" disabled>Claim rewards</button>
           <section className="stake-market-summary" aria-label="Staking summary">
@@ -1124,7 +1124,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
             <p>{stakingState.positionCount} active staking position{stakingState.positionCount === 1 ? "" : "s"}. APR appears after real reward activity exists.</p>
           </section>
         </div>
-        <p className="stake-warning">Sui Testnet beta. No lockup; withdrawals are available at any time.</p>
+        <p className="stake-warning">Sui Testnet beta. Each deposit starts a seven-day lock for the wallet's full staking position.</p>
         <Link className="back-link" href="/mine">Back to mining grid</Link>
       </section>}
       <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Project documents"><Link href="/whitepaper">Whitepaper</Link><Link href="/roadmap">Roadmap</Link><Link href="/tokenomics">Tokenomics</Link></nav></footer>

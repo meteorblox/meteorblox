@@ -2,6 +2,8 @@ module slvrblox::staking;
 
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
+use sui::clock::{Self, Clock};
+use sui::dynamic_field;
 use sui::event;
 use sui::object::{Self, UID};
 use sui::table::{Self, Table};
@@ -15,6 +17,11 @@ const E_POSITION_NOT_FOUND: u64 = 2;
 const E_INSUFFICIENT_STAKE: u64 = 3;
 const E_NO_REWARDS: u64 = 4;
 const E_NO_STAKERS: u64 = 5;
+const E_POSITION_LOCKED: u64 = 6;
+const E_USE_LOCKED_API: u64 = 7;
+const LOCK_PERIOD_MS: u64 = 604_800_000;
+
+public struct LockKey has copy, drop, store { owner: address }
 
 public struct Position has store {
     staked: Balance<DSLVR>,
@@ -38,6 +45,7 @@ public struct Staked has copy, drop { vault: ID, owner: address, amount: u64 }
 public struct Unstaked has copy, drop { vault: ID, owner: address, amount: u64 }
 public struct RewardsAdded has copy, drop { vault: ID, amount: u64 }
 public struct RewardsClaimed has copy, drop { vault: ID, owner: address, amount: u64 }
+public struct StakeLockUpdated has copy, drop { vault: ID, owner: address, unlock_at_ms: u64 }
 
 public fun create_vault(ctx: &mut TxContext) {
     let vault = Vault {
@@ -55,7 +63,12 @@ public fun create_vault(ctx: &mut TxContext) {
     event::emit(VaultCreated { vault: id });
 }
 
-public fun stake(vault: &mut Vault, payment: Coin<DSLVR>, ctx: &mut TxContext) {
+/// Retained for package upgrade compatibility. Use `stake_locked`.
+public fun stake(_vault: &mut Vault, _payment: Coin<DSLVR>, _ctx: &mut TxContext) {
+    abort E_USE_LOCKED_API
+}
+
+public fun stake_locked(vault: &mut Vault, payment: Coin<DSLVR>, clock: &Clock, ctx: &mut TxContext) {
     let amount = coin::value(&payment);
     assert!(amount > 0, E_ZERO_AMOUNT);
     let owner = tx_context::sender(ctx);
@@ -73,13 +86,30 @@ public fun stake(vault: &mut Vault, payment: Coin<DSLVR>, ctx: &mut TxContext) {
         vault.position_count = vault.position_count + 1;
     };
     vault.total_staked = vault.total_staked + amount;
+    let unlock_at_ms = lock_deadline(clock::timestamp_ms(clock));
+    let lock_key = LockKey { owner };
+    if (dynamic_field::exists_(&vault.id, lock_key)) {
+        *dynamic_field::borrow_mut(&mut vault.id, lock_key) = unlock_at_ms;
+    } else {
+        dynamic_field::add(&mut vault.id, lock_key, unlock_at_ms);
+    };
     event::emit(Staked { vault: object::id(vault), owner, amount });
+    event::emit(StakeLockUpdated { vault: object::id(vault), owner, unlock_at_ms });
 }
 
-public fun unstake(vault: &mut Vault, amount: u64, ctx: &mut TxContext) {
+/// Retained for package upgrade compatibility. Use `unstake_locked`.
+public fun unstake(_vault: &mut Vault, _amount: u64, _ctx: &mut TxContext) {
+    abort E_USE_LOCKED_API
+}
+
+public fun unstake_locked(vault: &mut Vault, amount: u64, clock: &Clock, ctx: &mut TxContext) {
     assert!(amount > 0, E_ZERO_AMOUNT);
     let owner = tx_context::sender(ctx);
     assert!(table::contains(&vault.positions, owner), E_POSITION_NOT_FOUND);
+    let lock_key = LockKey { owner };
+    if (dynamic_field::exists_(&vault.id, lock_key)) {
+        assert!(clock::timestamp_ms(clock) >= *dynamic_field::borrow(&vault.id, lock_key), E_POSITION_LOCKED);
+    };
     sync_position(vault, owner);
     let position = table::borrow_mut(&mut vault.positions, owner);
     assert!(balance::value(&position.staked) >= amount, E_INSUFFICIENT_STAKE);
@@ -132,11 +162,23 @@ fun reward_increment(reward: u64, total_staked: u64): u128 {
     ((reward as u128) * SCALE) / (total_staked as u128)
 }
 
+fun lock_deadline(now_ms: u64): u64 { now_ms + LOCK_PERIOD_MS }
+
 public fun total_staked(vault: &Vault): u64 { vault.total_staked }
 public fun reward_balance(vault: &Vault): u64 { balance::value(&vault.rewards) }
 public fun position_count(vault: &Vault): u64 { vault.position_count }
 public fun total_rewards_added(vault: &Vault): u64 { vault.total_rewards_added }
 public fun total_rewards_claimed(vault: &Vault): u64 { vault.total_rewards_claimed }
+public fun lock_period_ms(): u64 { LOCK_PERIOD_MS }
+
+public fun unlock_at_ms(vault: &Vault, owner: address): u64 {
+    let lock_key = LockKey { owner };
+    if (dynamic_field::exists_(&vault.id, lock_key)) {
+        *dynamic_field::borrow(&vault.id, lock_key)
+    } else {
+        0
+    }
+}
 
 #[test]
 fun test_equal_stakers_split_rewards() {
@@ -156,4 +198,10 @@ fun test_rounding_never_over_distributes() {
     let increment = reward_increment(10, 3);
     let distributed = (debt(1, increment) / SCALE) * 3;
     assert!(distributed <= 10, 103);
+}
+
+#[test]
+fun test_seven_day_lock_deadline() {
+    assert!(lock_deadline(1_000) == 604_801_000, 104);
+    assert!(lock_period_ms() == 604_800_000, 105);
 }

@@ -39,7 +39,7 @@ export function LandingPage() {
         <a href="https://discord.gg/G7Uc3Ck66" target="_blank" rel="noreferrer" title="Join SLVRBLOX on Discord" aria-label="Join SLVRBLOX on Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.54 5.34A17.3 17.3 0 0 0 15.29 4l-.52 1.06a15.77 15.77 0 0 0-5.54 0L8.7 4A17.45 17.45 0 0 0 4.45 5.34C1.76 9.43 1.03 13.42 1.4 17.35a17.1 17.1 0 0 0 5.21 2.69l1.26-1.76a11.1 11.1 0 0 1-1.98-.97l.49-.38c3.82 1.8 7.96 1.8 11.73 0l.5.38c-.64.38-1.3.7-1.99.97l1.26 1.76a17.03 17.03 0 0 0 5.21-2.69c.43-4.56-.73-8.51-3.55-12.01ZM8.68 14.93c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.93 2.4-2.1 2.4Zm6.64 0c-1.15 0-2.1-1.08-2.1-2.4s.93-2.4 2.1-2.4c1.18 0 2.12 1.09 2.1 2.4 0 1.32-.92 2.4-2.1 2.4Z" /></svg></a>
         <a href="https://t.me/+0Nh5q0wj2IY3OTkx" target="_blank" rel="noreferrer" title="Follow SLVRBLOX on Telegram" aria-label="Follow SLVRBLOX on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.7 3.3a1.4 1.4 0 0 0-1.45-.2L2.9 9.8c-1.18.46-1.16 1.13-.2 1.43l4.45 1.39 1.72 5.27c.21.58.11.82.73.82.48 0 .69-.22.96-.48l2.13-2.07 4.43 3.27c.82.45 1.41.22 1.61-.76l2.92-13.76c.3-1.2-.46-1.75.05-1.61ZM8.62 12.3l8.68-5.48c.43-.26.82-.12.5.17l-7.16 6.46-.28 3.03-1.74-4.18Z" /></svg></a>
       </div>
-      <a className="landing-presale" href="https://sale.slvrblox.com">Presale <span>↗</span></a>
+      <Link className="landing-presale" href="/mine">Play Testnet <span>→</span></Link>
     </header>
 
     <section className="landing-hero">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChatDrawer } from "./chat/drawer";
 import { useCurrentAccount, useCurrentWallet, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
@@ -66,6 +67,7 @@ type ChainState = {
 };
 
 export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards" | "stake" }) {
+  const pathname = usePathname();
   const [view, setView] = useState<"mine" | "rewards" | "stake">(initialView);
   const [stakeMode, setStakeMode] = useState<"stake" | "unstake">("stake");
   const [stakeAmount, setStakeAmount] = useState("");
@@ -83,6 +85,11 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
   const [username, setUsername] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
   const [leaderboardTab, setLeaderboardTab] = useState<"miners" | "unrefined" | "refined">("miners");
+
+  useEffect(() => {
+    if (pathname === "/stake") setView("stake");
+    if (pathname === "/mine") setView("mine");
+  }, [pathname]);
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);

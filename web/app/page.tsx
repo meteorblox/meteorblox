@@ -585,9 +585,9 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     transaction.setGasBudget(30_000_000);
     if (stakeMode === "stake") {
       const payment = transaction.coin({ type: dslvrCoinType, balance: units });
-      transaction.moveCall({ target: `${activePackageId}::staking::stake`, arguments: [transaction.object(stakingVaultId), payment] });
+      transaction.moveCall({ target: `${activePackageId}::staking::stake_locked`, arguments: [transaction.object(stakingVaultId), payment, transaction.object(suiClockId)] });
     } else {
-      transaction.moveCall({ target: `${activePackageId}::staking::unstake`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units)] });
+      transaction.moveCall({ target: `${activePackageId}::staking::unstake_locked`, arguments: [transaction.object(stakingVaultId), transaction.pure.u64(units), transaction.object(suiClockId)] });
     }
     setSubmittingStake(true);
     setNotice(`Waiting for wallet approval to ${stakeMode} DSLVR...`);
@@ -1103,14 +1103,14 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
         {notice && <p className="notice rewards-notice" role="status">{notice}</p>}<p className="disclaimer rewards-disclaimer">Live Sui Testnet state. Test SUI has no monetary value. Contract logic is unaudited and must not be used on Mainnet yet.</p>
         <button className="back-link" onClick={() => { setView("mine"); setNotice(""); }}>Back to mining grid</button>
       </section> : <section className="stake-page">
-        <div className="stake-hero"><p className="eyebrow">TESTNET BETA</p><h1>Stake DSLVR</h1><p>Stake freely. Earn DSLVR rewards.</p></div>
+        <div className="stake-hero"><p className="eyebrow">TESTNET BETA</p><h1>Stake DSLVR</h1><p>Stake for at least seven days. Earn DSLVR rewards.</p></div>
         <div className="stake-simple">
           <div className="stake-summary"><span><small>YOUR STAKE</small><strong>{stakingState.userStakedDslvr.toFixed(6)} DSLVR</strong></span><span><small>VAULT REWARDS</small><strong>{stakingState.rewardBalanceDslvr.toFixed(6)} DSLVR</strong></span></div>
           <article className="stake-card">
             <div className="stake-tabs"><button className={stakeMode === "stake" ? "active" : ""} onClick={() => setStakeMode("stake")}>Stake</button><button className={stakeMode === "unstake" ? "active" : ""} onClick={() => setStakeMode("unstake")}>Unstake</button></div>
             <div className="stake-balance"><span>{stakeMode === "stake" ? "AVAILABLE" : "STAKED"}</span><strong>{(stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6)} DSLVR</strong></div>
             <label htmlFor="stake-amount">Amount</label><div className="stake-input"><input id="stake-amount" inputMode="decimal" placeholder="0.00" value={stakeAmount} onChange={(event) => setStakeAmount(event.target.value.replace(/[^0-9.]/g, ""))} /><span>DSLVR</span><button type="button" onClick={() => setStakeAmount((stakeMode === "stake" ? stakingState.availableDslvr : stakingState.userStakedDslvr).toFixed(6))}>MAX</button></div>
-            <div className="stake-note"><span>No lockup</span><span>Withdraw anytime</span></div>
+            <div className="stake-note"><span>7-day minimum lock</span><span>Adding stake resets the lock</span></div>
             <button className="deploy stake-submit" disabled={submittingStake || !stakeAmount || (stakeMode === "unstake" && stakingState.userStakedDslvr <= 0)} onClick={submitStakeAction}>{submittingStake ? "Waiting for wallet approval..." : stakeMode === "stake" ? "Stake DSLVR" : "Unstake DSLVR"}</button>
           </article>
           <button className="claim-yield" disabled>Claim rewards</button>
@@ -1124,7 +1124,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
             <p>{stakingState.positionCount} active staking position{stakingState.positionCount === 1 ? "" : "s"}. APR appears after real reward activity exists.</p>
           </section>
         </div>
-        <p className="stake-warning">Sui Testnet beta. No lockup; withdrawals are available at any time.</p>
+        <p className="stake-warning">Sui Testnet beta. Each deposit starts a seven-day lock for the wallet's full staking position.</p>
         <Link className="back-link" href="/mine">Back to mining grid</Link>
       </section>}
       <footer><p><strong>SLVRBLOX / DSLVR</strong> &middot; Live on Sui Testnet</p><nav aria-label="Project documents"><Link href="/whitepaper">Whitepaper</Link><Link href="/roadmap">Roadmap</Link><Link href="/tokenomics">Tokenomics</Link></nav></footer>

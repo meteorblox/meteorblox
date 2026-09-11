@@ -66,6 +66,11 @@ type ChainState = {
   lastRound: { round: number; winningTile: number; deployedSui: number; rewardPoolSui: number; mtbxAwarded: number; transaction: string | null } | null;
 };
 
+type MinerRound = {
+  round: number; settled: boolean; winningTile: number | null;
+  miners: Array<{ address: string; username: string; tiles: number[]; tileCount: number; deployedSui: number; winningsSui: number; dslvrWinnings: number; won: boolean }>;
+};
+
 export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards" | "stake" }) {
   const pathname = usePathname();
   const [view, setView] = useState<"mine" | "rewards" | "stake">(initialView);
@@ -90,6 +95,9 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     if (pathname === "/stake") setView("stake");
     if (pathname === "/mine") setView("mine");
   }, [pathname]);
+  const [minerRounds, setMinerRounds] = useState<MinerRound[]>([]);
+  const [minerRoundIndex, setMinerRoundIndex] = useState(0);
+  const [selectedMiner, setSelectedMiner] = useState<string | null>(null);
   const [lifetimeDeployed, setLifetimeDeployed] = useState(0);
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [chainState, setChainState] = useState<ChainState | null>(null);
@@ -218,6 +226,25 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     const timer = window.setInterval(() => void refreshChainState(), 10_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, [refreshChainState]);
+
+  const refreshMiners = useCallback(async () => {
+    try {
+      const query = currentAddress ? `?address=${encodeURIComponent(currentAddress)}` : "";
+      const response = await fetch(`/api/explore${query}`, { cache: "no-store" });
+      const data = await response.json() as { minerRounds?: MinerRound[] };
+      if (response.ok && Array.isArray(data.minerRounds)) setMinerRounds(data.minerRounds);
+    } catch { /* Keep the last confirmed miner snapshot. */ }
+  }, [currentAddress]);
+
+  useEffect(() => {
+    if (view !== "mine") return;
+    void refreshMiners();
+    const timer = window.setInterval(() => void refreshMiners(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [view, refreshMiners]);
+
+  const visibleMinerRound = minerRounds[minerRoundIndex] ?? null;
+  const visibleMiner = visibleMinerRound?.miners.find((miner) => miner.address === selectedMiner) ?? null;
 
   const refreshStakingState = useCallback(async () => {
     const query = currentAddress ? `?address=${encodeURIComponent(currentAddress)}` : "";
@@ -1091,7 +1118,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Complete 20-DSLVR purchase</h2><p>Authorizes the rehearsal buyer, opens the sale, and spends exactly 20 valueless tUSDC to purchase 20 vested DSLVR.</p><button className="deploy" disabled={roundAction} onClick={completeRehearsalPurchase}>{roundAction ? "Waiting for wallet approval..." : "Buy 20 DSLVR for 20 tUSDC — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Finalize rehearsal sale</h2><p>Closes the completed Testnet sale after its purchase window and fixes the launch vesting schedule.</p><button className="deploy" disabled={roundAction || Date.now() < rehearsalEndsAtMs} onClick={finalizeRehearsalSale}>{roundAction ? "Waiting for wallet approval..." : "Finalize Presale — Testnet"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && <article className="claim-card testnet-publish"><small>PRESALE REHEARSAL · TESTNET ONLY</small><h2>Complete rehearsal launch</h2><p>Claims the buyer's 20% launch unlock and returns only unsold Testnet DSLVR to the treasury. The remaining buyer allocation stays locked in vesting.</p><button className="deploy" disabled={roundAction || Date.now() < rehearsalLaunchAtMs} onClick={completeRehearsalLaunch}>{roundAction ? "Waiting for wallet approval..." : "Claim launch unlock + return unsold"}</button></article>}
-        <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">TESTNET ACTIVITY</p><h2>Miners</h2></div><span>Global Sui indexing next</span></div><div className="miners-tabs" role="tablist" aria-label="Miner leaderboard"><button className={leaderboardTab === "miners" ? "active" : ""} onClick={() => setLeaderboardTab("miners")}>Miners</button><button className={leaderboardTab === "unrefined" ? "active" : ""} onClick={() => setLeaderboardTab("unrefined")}>Unrefined</button><button className={leaderboardTab === "refined" ? "active" : ""} onClick={() => setLeaderboardTab("refined")}>Refined</button></div><div className="miners-table" role="table" aria-label="Testnet miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">{leaderboardTab === "miners" ? "Total deployed" : leaderboardTab === "unrefined" ? "Unrefined DSLVR" : "Refined DSLVR"}</span></div>{currentAccount ? <div className="miners-row" role="row"><strong role="cell">#1</strong><span role="cell"><i className="miner-avatar">M</i><b>{username || `${currentAccount.address.slice(0, 7)}...${currentAccount.address.slice(-5)}`}</b><small>You</small></span><strong role="cell">{leaderboardTab === "miners" ? `${lifetimeDeployed.toFixed(4)} SUI` : "Pending index"}</strong></div> : <div className="miners-empty">Connect a Testnet wallet to join the leaderboard.</div>}</div><p>Rankings will be rebuilt from confirmed EntryPlaced and RewardAwarded events so every miner and total is independently verifiable.</p></section>
+        <section className="miners-board"><div className="miners-heading"><div><p className="eyebrow">LIVE TESTNET ACTIVITY</p><h2>Miners</h2></div><span>{visibleMinerRound ? `Round #${String(visibleMinerRound.round).padStart(6, "0")}${visibleMinerRound.settled ? " · settled" : " · live"}` : "Loading on-chain activity…"}</span></div><div className="miners-table" role="table" aria-label="Round miners"><div className="miners-row miners-header" role="row"><span role="columnheader">Rank</span><span role="columnheader">Miner</span><span role="columnheader">Tiles / deployed</span></div>{visibleMinerRound?.miners.length ? visibleMinerRound.miners.map((miner, index) => <button className={`miners-row miner-button${selectedMiner === miner.address ? " selected" : ""}`} role="row" key={`${visibleMinerRound.round}:${miner.address}`} onClick={() => setSelectedMiner(selectedMiner === miner.address ? null : miner.address)}><strong role="cell">#{index + 1}</strong><span role="cell"><i className="miner-avatar">{(miner.username || "M").slice(0, 1).toUpperCase()}</i><b>{miner.username || `${miner.address.slice(0, 6)}...${miner.address.slice(-4)}`}</b>{currentAddress?.toLowerCase() === miner.address ? <small>You</small> : null}</span><strong role="cell"><small>{miner.tileCount} tile{miner.tileCount === 1 ? "" : "s"}</small>{miner.deployedSui.toFixed(4)} SUI</strong></button>) : <div className="miners-empty">No confirmed deployments in this indexed round yet.</div>}</div>{visibleMiner ? <div className="miner-detail"><div className="miner-detail-head"><div><small>MINER DEPLOYMENT</small><strong>{visibleMiner.username || `${visibleMiner.address.slice(0, 9)}...${visibleMiner.address.slice(-6)}`}</strong></div><button onClick={() => setSelectedMiner(null)} aria-label="Close miner details">×</button></div><div className="miner-tile-grid">{tiles.map((tile) => <span key={tile} className={`${visibleMiner.tiles.includes(tile) ? "deployed" : ""}${visibleMinerRound?.winningTile === tile ? " winner" : ""}`}>{tile}</span>)}</div><dl><div><dt>Deployed</dt><dd>{visibleMiner.deployedSui.toFixed(4)} SUI</dd></div><div><dt>Rewards</dt><dd>{visibleMiner.winningsSui.toFixed(4)} SUI · {visibleMiner.dslvrWinnings.toFixed(6)} DSLVR</dd></div></dl></div> : null}<div className="miner-pagination"><button disabled={minerRoundIndex >= minerRounds.length - 1} onClick={() => { setMinerRoundIndex((value) => Math.min(minerRounds.length - 1, value + 1)); setSelectedMiner(null); }} aria-label="Previous round">‹</button><span>{visibleMinerRound ? `Round ${visibleMinerRound.round}` : "—"}</span><button disabled={minerRoundIndex === 0} onClick={() => { setMinerRoundIndex((value) => Math.max(0, value - 1)); setSelectedMiner(null); }} aria-label="Next round">›</button></div><p>Tap a miner to see exactly which tiles they deployed on and what the round paid them.</p></section>
         {currentAccount?.address.toLowerCase() === testnetOwner && !chainState?.rewardsBound && <article className="claim-card testnet-publish"><small>OWNER TESTNET MILESTONE</small><h2>Activate the live game</h2><p>One-time setup binds the unique DSLVR RewardCap to the shared Game and opens the first playable 60-second Testnet round.</p><button className="deploy" disabled={activatingGame} onClick={activateTestnetGame}>{activatingGame ? "Waiting for wallet approval…" : "Activate live Testnet round"}</button></article>}
         {currentAccount?.address.toLowerCase() === testnetOwner && chainState?.rewardsBound && chainState.settled && chainState.winningEntriesRemaining === 0 && <article className="claim-card testnet-publish"><small>OWNER ROUND CONTROL</small><h2>Open the next round</h2><p>The previous round is settled and all winning entries are claimed.</p><button className="deploy" disabled={roundAction} onClick={openNextRound}>Open next 60-second round</button></article>}
         {notice && <p className="notice rewards-notice" role="status">{notice}</p>}<p className="disclaimer rewards-disclaimer">Live Sui Testnet state. Test SUI has no monetary value. Contract logic is unaudited and must not be used on Mainnet yet.</p>

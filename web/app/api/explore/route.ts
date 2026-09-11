@@ -1,5 +1,6 @@
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { getD1 } from "../../../db/runtime";
+import { getProfiles } from "../../../db/profiles";
 
 const packageId = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771";
 // Sui event types retain the package version where the struct was introduced.
@@ -98,6 +99,36 @@ async function loadExplore(requestedPlayer: string) {
     const entries = entryEvents;
     const motherlodeHits = new Set(motherlodeEvents.filter((event) => Boolean(event.json?.hit)).map((event) => Number(event.json?.round ?? 0)));
     const miners = new Set(entries.map((event) => String(event.json?.player ?? "").toLowerCase()).filter(Boolean));
+    const minerByRound = new Map<number, Map<string, { address: string; tiles: Set<number>; deployed: bigint; winnings: bigint; dslvr: bigint }>>();
+    for (const event of entries) {
+      const address = String(event.json?.player ?? "").toLowerCase();
+      if (!address) continue;
+      const round = Number(event.json?.round ?? 0);
+      const roundMiners = minerByRound.get(round) ?? new Map();
+      const miner = roundMiners.get(address) ?? { address, tiles: new Set<number>(), deployed: 0n, winnings: 0n, dslvr: 0n };
+      miner.tiles.add(Number(event.json?.tile ?? 0) + 1);
+      miner.deployed += asBigInt(event.json?.amount);
+      roundMiners.set(address, miner);
+      minerByRound.set(round, roundMiners);
+    }
+    for (const claim of winnings) {
+      const address = String(claim.json?.player ?? "").toLowerCase();
+      const round = Number(claim.json?.round ?? 0);
+      const miner = minerByRound.get(round)?.get(address);
+      if (!miner) continue;
+      miner.winnings += asBigInt(claim.json?.amount);
+      miner.dslvr += asBigInt(claim.json?.dslvr_amount);
+    }
+    const profiles = await getProfiles([...miners]);
+    const minerRounds = [...minerByRound.entries()].sort(([left], [right]) => right - left).slice(0, 20).map(([round, roundMiners]) => {
+      const settled = settledEvents.find((event) => Number(event.json?.round ?? 0) === round);
+      return { round, settled: Boolean(settled), winningTile: settled ? Number(settled.json?.winning_tile ?? 0) + 1 : null,
+        miners: [...roundMiners.values()].sort((left, right) => Number(right.deployed - left.deployed)).map((miner) => ({
+          address: miner.address, username: profiles.get(miner.address) ?? "", tiles: [...miner.tiles].sort((left, right) => left - right),
+          tileCount: miner.tiles.size, deployedSui: sui(miner.deployed), winningsSui: sui(miner.winnings),
+          dslvrWinnings: dslvr(miner.dslvr), won: miner.winnings > 0n || miner.dslvr > 0n,
+        })) };
+    });
     const rounds = settledEvents.map((event) => {
       const round = Number(event.json?.round ?? 0);
       const gross = asBigInt(event.json?.gross);
@@ -171,6 +202,7 @@ async function loadExplore(requestedPlayer: string) {
       indexedEntries: entries.length,
       indexedMiners: miners.size,
       indexedDeployedSui: entries.reduce((sum, event) => sum + sui(event.json?.amount), 0),
+      minerRounds,
       rounds,
       audit,
       auditSummary: { checked: audit.length, passed: audit.filter((item) => item.status === "pass").length, mismatches: audit.filter((item) => item.status === "mismatch").length, pending: audit.filter((item) => item.status === "pending").length },

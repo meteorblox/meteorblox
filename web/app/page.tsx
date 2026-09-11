@@ -950,7 +950,7 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     }
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
-    transaction.setGasBudget(500_000_000);
+    transaction.setGasBudget(100_000_000);
     for (const operation of operations) {
       transaction.moveCall({
         target: `${activePackageId}::dslvr::${operation.target}`,

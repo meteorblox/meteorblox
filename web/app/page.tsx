@@ -948,32 +948,26 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
       const legacyClaims = supportsClaimAll ? 1 : (chainState?.legacyRefinedPositions ?? count);
       for (let index = 0; index < legacyClaims; index += 1) operations.push({ target: supportsClaimAll ? "claim_all_refined" : "claim_refined", v2: false });
     }
-    let completed = 0;
-    let lastDigest = "";
+    const transaction = new Transaction();
+    transaction.setSender(currentAccount.address);
+    transaction.setGasBudget(500_000_000);
+    for (const operation of operations) {
+      transaction.moveCall({
+        target: `${activePackageId}::dslvr::${operation.target}`,
+        arguments: operation.v2
+          ? [transaction.object(refineryId), transaction.object(chainState!.refineryV2Id!), transaction.object(suiClockId), ...(operation.maxPositions ? [transaction.pure.u64(operation.maxPositions)] : [])]
+          : [transaction.object(refineryId), transaction.object(suiClockId)],
+      });
+    }
     setRoundAction(true);
+    setNotice(early ? "Waiting for one wallet approval to withdraw all unrefined DSLVR..." : "Waiting for one wallet approval to claim all refined DSLVR...");
     try {
-      for (let index = 0; index < operations.length; index += 1) {
-        const operation = operations[index];
-        const transaction = new Transaction();
-        transaction.setSender(currentAccount.address); transaction.setGasBudget(200_000_000);
-        transaction.moveCall({
-          target: `${activePackageId}::dslvr::${operation.target}`,
-          arguments: operation.v2
-            ? [transaction.object(refineryId), transaction.object(chainState!.refineryV2Id!), transaction.object(suiClockId), ...(operation.maxPositions ? [transaction.pure.u64(operation.maxPositions)] : [])]
-            : [transaction.object(refineryId), transaction.object(suiClockId)],
-        });
-        setNotice(early ? `Approve unrefined DSLVR withdrawal batch ${index + 1} of ${operations.length}...` : `Approve refined DSLVR claim ${index + 1} of ${operations.length}...`);
-        const result = await executeWithSlush(transaction);
-        if (!result) break;
-        completed += 1;
-        lastDigest = result.digest;
-        setNotice(early ? `DSLVR withdrawal confirmed. Transaction: ${lastDigest}` : `Completed ${completed} of ${operations.length} refinery claim transactions...`);
-      }
-      if (completed) setNotice(early ? `All unrefined DSLVR withdrawn. Last transaction: ${lastDigest}` : `All currently refined DSLVR claimed. Last transaction: ${lastDigest}`);
+      const result = await executeWithSlush(transaction);
+      if (result) setNotice(early ? `All unrefined DSLVR withdrawn. Transaction: ${result.digest}` : `All currently refined DSLVR claimed. Transaction: ${result.digest}`);
       await refreshChainState();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unexpected wallet error";
-      setNotice(completed ? `Completed ${completed} refinery claim transactions before stopping: ${detail}` : `DSLVR claim failed: ${detail}`);
+      setNotice(`DSLVR claim failed: ${detail}`);
       await refreshChainState();
     }
     finally { setRoundAction(false); }

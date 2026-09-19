@@ -5,10 +5,10 @@ import { ActivityMeter } from "./activity-meter";
 import { useCurrentAccount, useCurrentWallet, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { activationMessage, checkState, SENTINEL_VMH } from "./model";
+import { activationMessage, demoClaimMessage, checkState, SENTINEL_VMH } from "./model";
 import type { ProtocolCheck, SentinelNode } from "./model";
 
-type Snapshot = { enabled: boolean; activationPaused: boolean; node: SentinelNode | null; checks: ProtocolCheck[] };
+type Snapshot = { enabled: boolean; activationPaused: boolean; node: SentinelNode | null; checks: ProtocolCheck[]; demoRewards?: { earned: number; claimed: number } | null };
 const short = (value: string) => `${value.slice(0, 8)}…${value.slice(-6)}`;
 const date = (timestamp: number) => new Date(timestamp).toLocaleString();
 const gameId = "0x2133b5403f7513b64ecd9d314d951e5969a6064f3682b3ac3d444a3ab95c2522";
@@ -57,6 +57,24 @@ export function SentinelDashboard() {
     finally { setBusy(false); }
   }
 
+  async function claimDemo() {
+    const upTo = data?.demoRewards?.earned;
+    if (!address || !upTo || busy) return;
+    setBusy(true); setNotice("");
+    try {
+      const timestamp = Date.now();
+      const signed = await kit.signPersonalMessage({ message: new TextEncoder().encode(demoClaimMessage(address, timestamp, upTo)) });
+      const response = await fetch("/api/sentinel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "claim-demo", address, timestamp, upTo, bytes: signed.bytes, signature: signed.signature }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Demo claim failed");
+      await queryClient.invalidateQueries({ queryKey: ["sentinel", address] });
+      setNotice("Simulated rewards claimed in this dashboard. No tokens were sent to your wallet.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Demo claim was not completed"); }
+    finally { setBusy(false); }
+  }
+  const demo = data?.demoRewards;
+  const demoBalance = ((demo?.earned ?? 0) - (demo?.claimed ?? 0)) / 100;
+
   return <main className="sentinel-page">
     <header className="sentinel-header"><Link href="/mine" className="sentinel-brand">SLVRBLOX</Link><nav aria-label="Main navigation"><Link href="/mine">Mine</Link><Link href="/stake">Stake</Link><Link href="/sentinel" aria-current="page">Sentinel</Link><Link href="/airdrop">Airdrop</Link></nav><span className="sentinel-chip">SUI TESTNET</span></header>
     <div className="sentinel-content">
@@ -75,7 +93,7 @@ export function SentinelDashboard() {
           {notice && <p role="alert" className="sentinel-error">{notice}</p>}
         </section>
         <section className="sentinel-details" aria-label="Node details">
-          <div className="sentinel-metrics"><article className="sentinel-card"><p>Fixed reward weight</p><strong>{node ? SENTINEL_VMH : "—"} <small>units</small></strong><span>Your assigned weight stays fixed. The activity meter does not affect rewards.</span></article><article className="sentinel-card"><p>Test rewards</p><strong className="sentinel-text-value">Not enabled yet</strong><span>Accrual and claiming are a later testing stage. No rewards are accumulating.</span></article></div>
+          <div className="sentinel-metrics"><article className="sentinel-card"><p>Fixed reward weight</p><strong>{node ? SENTINEL_VMH : "—"} <small>units</small></strong><span>Your assigned weight stays fixed. The activity meter does not affect rewards.</span></article><article className="sentinel-card"><p>Simulated test rewards</p><strong>{demoBalance.toFixed(2)} <small>demo DSLVR</small></strong><span>Claimed: {((demo?.claimed ?? 0) / 100).toFixed(2)} · Total earned: {((demo?.earned ?? 0) / 100).toFixed(2)}</span><button className="sentinel-primary" disabled={busy || !node || demoBalance <= 0 || query.isError || data?.activationPaused} onClick={() => void claimDemo()}>{busy ? "Waiting for approval…" : "Claim simulated rewards"}</button><span className="sentinel-caption">0.01 demo DSLVR per successful monitoring minute after activation, including idle rounds. Failed checks earn nothing. This test rate is unrelated to mainnet rewards.</span><span className="sentinel-caption">Simulation only · No monetary value. Claims update this dashboard, never your wallet. No gas, token transfers, or airdrop entitlement. Demo balances may reset.</span></article></div>
           <article className="sentinel-card"><p className="sentinel-eyebrow">HOW THIS PILOT WORKS</p><h2>Help test the protocol dashboard</h2><p>Our hosted service observes SLVRBLOX game activity. Your test node gives you a place to review those observations and report what works or needs attention.</p><ul><li>Activate one free test node per wallet.</li><li>Return on different days and compare checks with game rounds.</li><li>Share dashboard, wallet, and mobile issues through <a href="https://discord.com/channels/1537270873587974174/1541589982962262187" target="_blank" rel="noreferrer">a private support ticket</a>.</li></ul><p className="sentinel-caption">The pilot runs alongside the game until it closes. Tester-airdrop rules will be published before qualifying activity begins; activation alone does not qualify.</p></article>
         </section>
       </div>

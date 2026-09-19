@@ -62,6 +62,10 @@ export function activationMessage(address: string, timestamp: number) {
   return `SLVRBLOX Sentinel testnet activation\nWallet: ${address}\nTimestamp: ${timestamp}\nActivate one free test node. No purchase or token transfer. This is not a mainnet node.`;
 }
 
+export function demoClaimMessage(address: string, timestamp: number, upTo: number) {
+  return `SLVRBLOX Sentinel simulated reward claim\nWallet: ${address}\nTimestamp: ${timestamp}\nClaim through demo credit: ${upTo}\nDemo only. No monetary value, token transfer, gas payment, or mainnet entitlement.`;
+}
+
 export function validActivation(address: unknown, timestamp: unknown, now = Date.now()): address is string {
   return typeof address === "string" && WALLET_PATTERN.test(address)
     && typeof timestamp === "number" && Number.isSafeInteger(timestamp)

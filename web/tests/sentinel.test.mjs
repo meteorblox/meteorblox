@@ -5,8 +5,8 @@ import { mkdtempSync, rmSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { activateNode, readNode, readChecks, saveCheck, sentinelDb } from "../db/sentinel.ts";
-import { activationMessage, checkState, validActivation } from "../app/sentinel/model.ts";
+import { activateNode, readNode, readChecks, saveCheck, sentinelDb, readDemoRewards } from "../db/sentinel.ts";
+import { activationMessage, demoClaimMessage, checkState, validActivation } from "../app/sentinel/model.ts";
 import { observation } from "../scripts/sentinel-monitor.mjs";
 import { GET, POST } from "../app/api/sentinel/route.ts";
 
@@ -110,4 +110,27 @@ test("saved activation survives a database close and reopen", async () => {
     rmSync(file);
     rmdirSync(directory);
   }
+});
+
+test("demo credits deduplicate observations; signed claims cannot replay into future earnings", async () => {
+  const db = await sentinelDb();
+  const tester = Ed25519Keypair.generate();
+  const address = tester.toSuiAddress();
+  const now = Date.now();
+  await activateNode(db, address, now - 300_000);
+  const check = { checkedAt: now - 120_000, connection: "ok", round: "42", closesAt: now - 200_000, settled: false, settlement: "none", lastSettledRound: null, transaction: null, playCount: 0 };
+  await Promise.all([saveCheck(db, check), saveCheck(db, check)]);
+  assert.deepEqual({ ...await readDemoRewards(db, address) }, { earned: 1, claimed: 0 });
+  await saveCheck(db, { ...check, checkedAt: now - 60_000, connection: "unavailable" });
+  assert.equal((await readDemoRewards(db, address)).earned, 1);
+  const timestamp = Date.now();
+  const signed = await tester.signPersonalMessage(new TextEncoder().encode(demoClaimMessage(address, timestamp, 1)));
+  const body = { action: "claim-demo", address, timestamp, upTo: 1, ...signed };
+  assert.equal((await POST(request(body))).status, 200);
+  assert.equal((await POST(request({ ...body, upTo: 2 }))).status, 400);
+  await saveCheck(db, { ...check, checkedAt: now });
+  await Promise.all([POST(request(body)), POST(request(body))]);
+  assert.deepEqual({ ...await readDemoRewards(db, address) }, { earned: 2, claimed: 1 });
+  const other = Ed25519Keypair.generate().toSuiAddress();
+  assert.equal((await POST(request({ ...body, address: other }))).status, 400);
 });

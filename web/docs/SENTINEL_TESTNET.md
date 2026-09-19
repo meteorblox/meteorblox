@@ -1,9 +1,9 @@
 # Sentinel testnet foundation
 
 This branch adds `/sentinel`, signed free activation, durable one-node-per-wallet
-records, and shared protocol observations. No token transfers, reward accrual,
-reward claims, mainnet purchases, economic allocations, or airdrop eligibility
-are implemented by this milestone.
+records, shared protocol observations, and simulated dashboard rewards. No token
+transfers, on-chain rewards, mainnet purchases, economic allocations, or airdrop
+eligibility are implemented by this milestone.
 
 ## Runtime
 
@@ -13,7 +13,7 @@ are implemented by this milestone.
 - Set `SENTINEL_ENABLED=true` to enable activation and start the monitor process.
   Default is off; the page then shows that the pilot is preparing.
 - `SENTINEL_ACTIVATION_PAUSED=true` stops new activations while preserving reads
-  and monitoring. It does not pause nonexistent rewards.
+  and monitoring. It also blocks simulated claims; monitoring and demo accrual continue.
 - The standalone monitor can run with
   `node --experimental-strip-types scripts/sentinel-monitor.mjs --run`.
 - Node 22.13+ is required, consistent with the existing application.
@@ -43,7 +43,7 @@ record is not evidence every intermediate round settled. A past closing time
 raises an attention message rather than asserting a failure.
 
 One observation per minute is stored, retained for seven days; the UI shows the
-latest thirty. The fixed reward weight is 5 units. Rewards are disabled.
+latest thirty. The fixed reward weight is 5 units. Real token rewards are disabled.
 Refreshing history neither runs a check nor qualifies a participant for an airdrop.
 
 The separate VMH activity meter uses the square root of confirmed positive-stake
@@ -71,3 +71,16 @@ feedback records; independently controllable reward/claim pauses. Keep the
 pilot open until the owner stops it or transitions to mainnet. The first review
 is after 7–14 days, not an automatic end date. The 100-node cap refers to the
 planned mainnet Founder release, not an approved testnet cap.
+
+## Simulated reward pilot
+
+Each activated wallet earns one integer demo credit (0.01 simulated DSLVR) per
+successful monitoring minute, including idle rounds. There is no historical
+backfill, no payment, no chain write, and no mainnet rate promise. Failed reads
+do not earn credits. The demo balance is kept in the persistent SQLite database.
+A last-minute cursor prevents duplicate accrual; a domain-separated signed claim
+authorizes only a specific cumulative credit total. Replaying an old approval
+cannot claim future earnings. Claims update dashboard balances only.
+
+Demo balances have no monetary value, may reset, and do not establish airdrop
+eligibility. Turning SENTINEL_ENABLED off stops the monitor and API operations.

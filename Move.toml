@@ -1,9 +1,10 @@
 [package]
 name = "slvrblox"
 edition = "2024"
+published-at = "0xaebe9d7ea708b5466bf500db575c12e5fb895ef3fcf1b8841e73b25ffebb6928"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
 
 [addresses]
-slvrblox = "0x0"
+slvrblox = "0xb0097a3ef50e48294eb15a4a0fb7a1c9d2c421b217dc384e44cec478e4072771"

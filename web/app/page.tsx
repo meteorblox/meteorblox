@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChatDrawer } from "./chat/drawer";
 import { useCurrentAccount, useCurrentWallet, useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
+import { planRefineryClaims } from "./refinery-claim-plan";
 import { Transaction } from "@mysten/sui/transactions";
 import { getWallets, type Wallet } from "@mysten/wallet-standard";
 import { upgradeData } from "./upgrade-data";
@@ -53,6 +54,8 @@ const startingAmounts = [0.031, 0.047, 0.061, 0.04, 0.046, 0.015, 0.048, 0.056, 
 type ChainState = {
   packageId: string;
   refineryV2Id: string | null;
+  pagedRewardsEnabled: boolean;
+  rewardPages: Array<{ page: string; refinedPositions: number; unrefinedPositions: number }>;
   upgradeCap: { version?: string } | null;
   round: number; closesAtMs: number; remainingMs: number; settled: boolean; rewardsBound: boolean; winningTile: number | null;
   tileTotals: number[]; potSui: number; winningEntriesRemaining: number; claimableWinningEntries: number;
@@ -956,51 +959,45 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
 
   async function claimMtbx(early: boolean) {
     if (!currentAccount) return setConnectOpen(true);
-    const count = early ? chainState?.unrefinedPositions ?? 0 : chainState?.refinedPositions ?? 0;
-    if (!count) return setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim.");
-    const supportsClaimAll = Number(chainState?.upgradeCap?.version ?? 0) >= 8;
-    const usingV2 = Boolean(chainState?.refineryV2Id);
-    const operations: Array<{ target: string; v2: boolean; maxPositions?: number }> = [];
-    const supportsBulkEarlyV2 = Number(chainState?.upgradeCap?.version ?? 0) >= 11;
-    const earlyBatchSize = 1_000;
-    if (usingV2 && early && (chainState?.v2UnrefinedPositions ?? 0) > 0) {
-      if (supportsBulkEarlyV2) {
-        const batches = Math.ceil((chainState?.v2WalletPositions ?? chainState?.v2UnrefinedPositions ?? 1) / earlyBatchSize);
-        for (let index = 0; index < batches; index += 1) operations.push({ target: "claim_all_early_v2", v2: true, maxPositions: earlyBatchSize });
-      } else operations.push({ target: "claim_early_v2", v2: true });
-    }
-    else if (early) operations.push({ target: "claim_early", v2: false });
-    if (!early && usingV2 && (chainState?.v2RefinedPositions ?? 0) > 0) operations.push({ target: "claim_all_refined_v2", v2: true });
-    if (!early && (!usingV2 || (chainState?.legacyRefinedPositions ?? 0) > 0)) {
-      const legacyClaims = supportsClaimAll ? 1 : (chainState?.legacyRefinedPositions ?? count);
-      for (let index = 0; index < legacyClaims; index += 1) operations.push({ target: supportsClaimAll ? "claim_all_refined" : "claim_refined", v2: false });
-    }
-    const transaction = new Transaction();
-    transaction.setSender(currentAccount.address);
-    for (const operation of operations) {
-      transaction.moveCall({
-        target: `${activePackageId}::dslvr::${operation.target}`,
-        arguments: operation.v2
-          ? [transaction.object(refineryId), transaction.object(chainState!.refineryV2Id!), transaction.object(suiClockId), ...(operation.maxPositions ? [transaction.pure.u64(operation.maxPositions)] : [])]
-          : [transaction.object(refineryId), transaction.object(suiClockId)],
-      });
-    }
+    const account = currentAccount;
+    let completed = 0;
+    let lastDigest = "";
     setRoundAction(true);
-    setNotice("Checking your DSLVR claim and estimating gas...");
+    setNotice("Checking your current DSLVR rewards...");
     try {
-      // Large refinery histories can exceed a fixed gas cap, even when storage
-      // rebates cover the final cost. Resolve and estimate before wallet approval.
-      await transaction.build({ client: dAppKit.getClient("testnet") });
-      setNotice(early ? "Waiting for one wallet approval to withdraw all unrefined DSLVR..." : "Waiting for one wallet approval to claim all refined DSLVR...");
-      const result = await executeWithSlush(transaction);
-      if (result) setNotice(early ? `All unrefined DSLVR withdrawn. Transaction: ${result.digest}` : `All currently refined DSLVR claimed. Transaction: ${result.digest}`);
-      await refreshChainState();
+      // Build from a fresh complete read, never a stale displayed balance.
+      const response = await fetch(`/api/game?address=${encodeURIComponent(account.address)}`, { cache: "no-store" });
+      const state = await response.json() as ChainState & { error?: string };
+      if (!response.ok) throw new Error(state.error ?? "Unable to read rewards");
+      const batches = planRefineryClaims(state, early);
+      if (!batches.length) { setNotice(early ? "No unrefined DSLVR is available for early withdrawal." : "No refined DSLVR is available to claim."); return; }
+      for (let index = 0; index < batches.length; index++) {
+        const transaction = new Transaction();
+        transaction.setSender(account.address);
+        for (const operation of batches[index]) {
+          transaction.moveCall({
+            target: `${state.packageId}::dslvr::${operation.target}`,
+            arguments: [transaction.object(refineryId), ...(operation.v2 ? [transaction.object(state.refineryV2Id!)] : []), transaction.object(suiClockId),
+              ...(operation.maxPositions ? [transaction.pure.u64(operation.maxPositions)] : []),
+              ...(operation.pages ? [transaction.pure.vector("u64", operation.pages)] : [])],
+          });
+        }
+        setNotice(`Checking claim ${index + 1} of ${batches.length} and estimating gas...`);
+        await transaction.build({ client: dAppKit.getClient("testnet") });
+        setNotice(`Wallet approval ${index + 1} of ${batches.length}: ${early ? "withdraw unrefined DSLVR (10% penalty on the unrefined portion)" : "claim refined DSLVR"}. ${completed} completed.`);
+        const result = await dAppKit.signAndExecuteTransaction({ transaction, account, network: "testnet" });
+        if ("FailedTransaction" in result && result.FailedTransaction) throw new Error(result.FailedTransaction.status.error?.message ?? "Claim failed on Sui Testnet");
+        lastDigest = result.Transaction.digest;
+        completed++;
+      }
+      setNotice(`${completed} of ${batches.length} claims completed. Rewards received; any new rewards continue refining. Transaction: ${lastDigest}`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unexpected wallet error";
-      setNotice(`DSLVR claim failed: ${detail}`);
+      setNotice(`DSLVR claim stopped: ${detail}. ${completed} claims completed. Refresh to check remaining rewards.${lastDigest ? ` Transaction: ${lastDigest}` : ""}`);
+    } finally {
       await refreshChainState();
+      setRoundAction(false);
     }
-    finally { setRoundAction(false); }
   }
 
   const latestTransaction = notice.match(/Transaction:\s*([A-Za-z0-9]+)/)?.[1] ?? chainState?.lastRound?.transaction ?? "None";

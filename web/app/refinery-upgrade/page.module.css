@@ -1,0 +1,25 @@
+.panel {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 28px;
+  color: #e2f3ff;
+  background: #101923;
+  border: 1px solid #294658;
+  border-radius: 18px;
+  line-height: 1.6;
+}
+.panel h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 18px; }
+.panel p { margin: 14px 0; }
+.panel button {
+  padding: 10px 16px;
+  border: 1px solid #65bdde;
+  border-radius: 8px;
+  color: #08141d;
+  background: #a8e2f6;
+  font-weight: 600;
+  cursor: pointer;
+}
+.panel button:disabled { background: #293a45; border-color: #415563; color: #a9bbc6; cursor: not-allowed; }
+.panel button:focus-visible, .panel a:focus-visible { outline: 3px solid #64dac7; outline-offset: 3px; }
+.panel a { color: #9adcf6; text-decoration: underline; }
+@media (max-width: 600px) { .panel { margin: 16px 8px; padding: 20px; } }

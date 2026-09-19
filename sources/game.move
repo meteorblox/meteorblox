@@ -364,7 +364,7 @@ entry fun settle_and_open_next(
     let remaining_capacity = capacity - round_dslvr;
     let added = if (remaining_capacity < MOTHERLODE_ROUND_CONTRIBUTION) remaining_capacity else MOTHERLODE_ROUND_CONTRIBUTION;
     if (added > 0) dslvr::reserve_for_motherlode(refinery, option::borrow(&game.reward_cap), added);
-    if (!dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+    if (!dynamic_field::exists(&game.id, MotherlodeKey {})) {
         dynamic_field::add(&mut game.id, MotherlodeKey {}, MotherlodeState { balance: 0 });
     };
     let motherlode = dynamic_field::borrow_mut<MotherlodeKey, MotherlodeState>(&mut game.id, MotherlodeKey {});
@@ -460,7 +460,7 @@ entry fun settle_and_open_next_v2(
     let remaining_capacity = capacity - round_dslvr;
     let added = if (remaining_capacity < MOTHERLODE_ROUND_CONTRIBUTION) remaining_capacity else MOTHERLODE_ROUND_CONTRIBUTION;
     if (added > 0) dslvr::reserve_for_motherlode(refinery, option::borrow(&game.reward_cap), added);
-    if (!dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+    if (!dynamic_field::exists(&game.id, MotherlodeKey {})) {
         dynamic_field::add(&mut game.id, MotherlodeKey {}, MotherlodeState { balance: 0 });
     };
     let motherlode = dynamic_field::borrow_mut<MotherlodeKey, MotherlodeState>(&mut game.id, MotherlodeKey {});
@@ -636,7 +636,7 @@ public fun motherlode_round_contribution(): u64 { MOTHERLODE_ROUND_CONTRIBUTION 
 public fun motherlode_odds(): u64 { MOTHERLODE_ODDS }
 public fun dslvr_round_reward(): u64 { DSLVR_ROUND_REWARD }
 public fun motherlode_balance(game: &Game): u64 {
-    if (dynamic_field::exists_(&game.id, MotherlodeKey {})) {
+    if (dynamic_field::exists(&game.id, MotherlodeKey {})) {
         dynamic_field::borrow<MotherlodeKey, MotherlodeState>(&game.id, MotherlodeKey {}).balance
     } else {
         0
@@ -662,3 +662,10 @@ fun test_dslvr_round_reward_is_quarter_token() {
 }
 
 
+
+/// Activate only after the frontend can read and claim reward pages.
+public fun enable_paged_refinery(game: &Game, refinery: &Refinery, v2: &mut RefineryV2, ctx: &TxContext) {
+    assert!(tx_context::sender(ctx) == game.admin, E_NOT_ADMIN);
+    assert!(option::is_some(&game.reward_cap), E_REWARDS_NOT_BOUND);
+    dslvr::enable_paged_rewards(refinery, v2, option::borrow(&game.reward_cap));
+}

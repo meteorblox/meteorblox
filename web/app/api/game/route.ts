@@ -1,3 +1,4 @@
+import { readPagedRewards, isMissingObject } from "../../refinery-pages.ts";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { bcs } from "@mysten/sui/bcs";
@@ -128,6 +129,7 @@ export async function GET(request: Request) {
     const refineryV2Id = process.env.REFINERY_V2_ID?.trim() ?? "";
     let refineryV2: RefineryV2Json | null = null;
     let v2Positions: Position[] = [];
+    const paged = refineryV2Id ? await readPagedRewards(client, refineryV2Id, address) : { enabled: false, openPositions: 0n, pages: [] };
     if (refineryV2Id) {
       const { object: v2Object } = await client.core.getObject({ objectId: refineryV2Id, include: { content: true } });
       if (!v2Object.content) throw new Error("Refinery V2 data unavailable");
@@ -139,7 +141,8 @@ export async function GET(request: Request) {
             name: { type: "address", bcs: bcs.Address.serialize(address).toBytes() },
           });
           v2Positions = (WalletPositionsBcs.parse(dynamicField.value.bcs) as { positions: Position[] }).positions;
-        } catch {
+        } catch (error) {
+          if (!isMissingObject(error)) throw error;
           v2Positions = [];
         }
       }
@@ -158,7 +161,7 @@ export async function GET(request: Request) {
     const mtbxPool = BigInt(game.dslvr_reward_initial);
     const estimatedSui = winningTotal > 0n ? winnerPool * userWinningStake / winningTotal : 0n;
     const estimatedMtbx = winningTotal > 0n ? mtbxPool * userWinningStake / winningTotal : 0n;
-    const combinedRefinery = { positions: [...refinery.positions, ...v2Positions] };
+    const combinedRefinery = { positions: [...refinery.positions, ...v2Positions, ...paged.pages.flatMap((page) => page.positions)] };
     const { refinedPositions, unrefinedPositions, refined, unrefined, ledgerCredits, ledgerCreditTotal } =
       rewardAccounting(address, combinedRefinery, ledger, now);
     const legacyAccounting = rewardAccounting(address, refinery, undefined, now);
@@ -213,6 +216,11 @@ export async function GET(request: Request) {
       v2RefinedPositions: v2Accounting.refinedPositions.length,
       v2UnrefinedPositions: v2Accounting.unrefinedPositions.length,
       v2WalletPositions: v2Positions.filter((position) => !position.claimed).length,
+      pagedRewardsEnabled: paged.enabled,
+      rewardPages: paged.pages.map((page) => {
+        const accounting = rewardAccounting(address, page, undefined, now);
+        return { page: page.page, refinedPositions: accounting.refinedPositions.length, unrefinedPositions: accounting.unrefinedPositions.length };
+      }),
       ledgerSui: sui(ledgerCreditTotal), ledgerCreditCount: ledgerCredits.length,
       walletSui: walletBalanceResult ? sui(BigInt(walletBalanceResult.balance.balance)) : 0,
       walletDslvr: walletDslvrBalanceResult ? mtbx(BigInt(walletDslvrBalanceResult.balance.balance)) : 0,
@@ -225,7 +233,7 @@ export async function GET(request: Request) {
         awardedDslvr: mtbx(BigInt(refinery.awarded)),
         mintedDslvr: mtbx(BigInt(refinery.minted)),
         forfeitedDslvr: mtbx(BigInt(refinery.forfeited)),
-        openPositions: refineryV2 ? Number(refineryV2.open_positions) : refinery.positions.filter((position) => !position.claimed).length,
+        openPositions: (refineryV2 ? Number(refineryV2.open_positions) : 0) + refinery.positions.filter((position) => !position.claimed).length + Number(paged.openPositions),
       },
       autoplayPlans,
       globalAutoplay,

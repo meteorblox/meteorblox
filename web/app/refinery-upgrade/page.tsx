@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useCurrentAccount, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
+import { useCurrentAccount, useCurrentWallet, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 import { refineryUpgradeData } from "../refinery-upgrade-data";
 import styles from "./page.module.css";
+import { approvedCapTransfer, buildApprovedCapTransfer } from "../upgrade-cap-transfer";
 
 type Status = { capId: string; gameId: string; refineryId: string; refineryV2Id: string; owner: string | null; gameAdmin: string; packageId: string; version: string; policy: number; active: boolean; candidateMatches: boolean; upgradeReady: boolean; activationReady: boolean };
 export default function RefineryUpgrade() {
   const account = useCurrentAccount(), dAppKit = useDAppKit(), wallets = useWallets();
+  const currentWallet = useCurrentWallet();
   const [status, setStatus] = useState<Status | null>(null), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   async function refresh() {
     const response = await fetch("/api/refinery-upgrade", { cache: "no-store" });
@@ -16,6 +18,37 @@ export default function RefineryUpgrade() {
     setStatus(next); return next as Status;
   }
   useEffect(() => { void refresh().catch((error) => setNotice(error.message)); }, []);
+  async function transferUpgradeCap() {
+    if (!account) return;
+    setBusy(true);
+    let completedDigest = "";
+    try {
+      const fresh = await refresh();
+      const transaction = buildApprovedCapTransfer(account.address, fresh);
+      const client = dAppKit.getClient("testnet");
+      setNotice("Simulating the approved UpgradeCap transfer and estimating test SUI gas...");
+      await transaction.build({ client });
+      const simulation = await client.core.simulateTransaction({ transaction, include: { effects: true } });
+      const simulated = simulation.Transaction ?? simulation.FailedTransaction;
+      if (!simulated.status.success) throw new Error(simulated.status.error?.message ?? "Transfer simulation failed");
+      const changes = simulated.effects?.changedObjects ?? [];
+      const capChange = changes.find((change) => change.objectId === approvedCapTransfer.capId);
+      if (capChange?.outputOwner?.$kind !== "AddressOwner" || capChange.outputOwner.AddressOwner !== approvedCapTransfer.to ||
+          changes.some((change) => change.objectId !== approvedCapTransfer.capId && change.objectId !== simulated.effects?.gasObject?.objectId)) {
+        throw new Error("Transfer simulation returned unexpected ownership or object changes.");
+      }
+      setNotice("Review in Slush: transfer one UpgradeCap to Suiet ending 42b7b2. This transfers contract upgrade authority; activation stays with Slush.");
+      const result = await dAppKit.signAndExecuteTransaction({ transaction, account, network: "testnet" });
+      if ("FailedTransaction" in result && result.FailedTransaction) throw new Error(result.FailedTransaction.status.error?.message ?? "Transfer failed");
+      completedDigest = result.Transaction.digest;
+      await client.core.waitForTransaction({ digest: completedDigest });
+      await refresh();
+      setNotice(`UpgradeCap transferred. Choose Suiet below, then review the contract upgrade. Activation still uses Slush. Transaction: ${completedDigest}`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Transfer failed";
+      setNotice(completedDigest ? `Transfer submitted; status refresh failed: ${detail}. Transaction: ${completedDigest}. Refresh status before continuing.` : detail);
+    } finally { setBusy(false); }
+  }
   async function submit(activate: boolean) {
     if (!account) return;
     setBusy(true);
@@ -50,7 +83,17 @@ export default function RefineryUpgrade() {
     <p>Local rehearsal: appending a reward to 4,426 existing entries cost about 0.00287 SUI with paging versus 0.02167 SUI with the old list. These are local measurements, not live fee guarantees.</p>
     <p>Contract version: {status?.version ?? "Loading…"}. Paging: {status?.active ? "Active" : "Not active"}.</p>
     <p style={{ overflowWrap: "anywhere" }}>Upgrade owner: {status?.owner ?? "Loading…"}<br />Activation owner: {status?.gameAdmin ?? "Loading…"}<br />Connected: {account?.address ?? "No wallet connected"}</p>
-    {!account && wallets.map((wallet) => <button key={wallet.name} disabled={busy} onClick={() => dAppKit.connectWallet({ wallet }).catch((error) => setNotice(error.message))}>Connect {wallet.name}</button>)}
+    <p>Wallet: {currentWallet?.name ?? "Not connected"}</p>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+      {wallets.map((wallet) => <button key={wallet.name} disabled={busy} onClick={() => dAppKit.connectWallet({ wallet }).catch((error) => setNotice(error.message))}>{account ? "Use" : "Connect"} {wallet.name}</button>)}
+    </div>
+    {status?.owner === approvedCapTransfer.from && status.upgradeReady && <section className={styles.transfer}>
+      <h2>Approved move to Suiet</h2>
+      <p>Transfer the contract’s UpgradeCap from Slush ending 114781 to your Suiet wallet. The receiving wallet will control future contract upgrades. Game activation authority stays with Slush.</p>
+      <p style={{ overflowWrap: "anywhere" }}>Receiving address: <strong>{approvedCapTransfer.to}</strong></p>
+      <p>This transaction transfers one UpgradeCap and uses test SUI for gas. It does not upgrade or activate the contract.</p>
+      <button disabled={busy || !account || account.address.toLowerCase() !== approvedCapTransfer.from} onClick={transferUpgradeCap}>Review UpgradeCap transfer to Suiet</button>
+    </section>}
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, margin: "24px 0" }}>
       <button disabled={busy || !account || !status?.upgradeReady || account.address.toLowerCase() !== status.owner?.toLowerCase()} onClick={() => submit(false)}>1. Review contract upgrade</button>
       <button disabled={busy || !account || !status?.activationReady || account.address.toLowerCase() !== status.gameAdmin?.toLowerCase()} onClick={() => submit(true)}>2. Review activation</button>

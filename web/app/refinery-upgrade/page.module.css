@@ -22,4 +22,6 @@
 .panel button:disabled { background: #293a45; border-color: #415563; color: #a9bbc6; cursor: not-allowed; }
 .panel button:focus-visible, .panel a:focus-visible { outline: 3px solid #64dac7; outline-offset: 3px; }
 .panel a { color: #9adcf6; text-decoration: underline; }
+.transfer { margin: 24px 0; padding: 20px; border: 1px solid #577b8f; border-radius: 12px; background: #142633; }
+.transfer h2 { font-size: 1.2rem; font-weight: 700; }
 @media (max-width: 600px) { .panel { margin: 16px 8px; padding: 20px; } }

@@ -43,8 +43,18 @@ record is not evidence every intermediate round settled. A past closing time
 raises an attention message rather than asserting a failure.
 
 One observation per minute is stored, retained for seven days; the UI shows the
-latest thirty. The 5 VMH value is assigned test weight only. Rewards are disabled.
+latest thirty. The fixed reward weight is 5 units. Rewards are disabled.
 Refreshing history neither runs a check nor qualifies a participant for an airdrop.
+
+The separate VMH activity meter uses the square root of confirmed positive-stake
+entries in the current open round, capped at 5. It is a visual index, not a reward
+multiplier or hardware hashrate. Manual and autoplay entries count equally.
+Observed activity carries across round changes with a two-minute linear decay
+when no further play is seen. An empty round timer does not create activity.
+Stale/failed game observations and legacy records without entry counts show
+unavailable, leaving chart gaps. Sampling once a minute can miss short rounds.
+The index is shared protocol activity and is visible even before node activation;
+the wallet's fixed weight is displayed separately. No random fluctuations are used.
 
 ## Before opening the pilot
 

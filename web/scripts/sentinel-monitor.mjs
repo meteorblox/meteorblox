@@ -19,6 +19,9 @@ export function observation(gameResult, eventResult, checkedAt = Date.now()) {
     settlement: !Array.isArray(events) ? "unavailable" : event ? "observed" : "none",
     lastSettledRound: event?.json?.round == null ? null : String(event.json.round),
     transaction: typeof event?.transactionDigest === "string" ? event.transactionDigest : null,
+    playCount: validGame && Array.isArray(game.entries)
+      ? game.entries.filter((entry) => String(entry.round) === String(game.round) && /^\d+$/.test(String(entry.stake)) && BigInt(entry.stake) > 0n).length
+      : null,
   };
 }
 

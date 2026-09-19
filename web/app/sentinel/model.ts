@@ -12,7 +12,51 @@ export type ProtocolCheck = {
   settlement: "observed" | "none" | "unavailable";
   lastSettledRound: string | null;
   transaction: string | null;
+  // Missing in observations recorded before activity monitoring was introduced.
+  playCount?: number | null;
 };
+
+export const ACTIVITY_GRACE_MS = 120_000;
+export type ActivityPoint = { time: number; value: number | null };
+
+// An activity index only. Never use this value for reward accounting.
+export function activitySeries(checks: ProtocolCheck[], now = Date.now()): ActivityPoint[] {
+  const ordered = [...checks].filter((check) => check.checkedAt <= now).sort((a, b) => a.checkedAt - b.checkedAt);
+  let lastActiveAt = -Infinity;
+  let lastStrength = 0;
+  let previousAt = -Infinity;
+  const points: ActivityPoint[] = [];
+  for (const check of ordered) {
+    if (check.checkedAt - previousAt > CHECK_STALE_MS) {
+      lastActiveAt = -Infinity;
+      lastStrength = 0;
+      if (points.length) points.push({ time: previousAt + CHECK_STALE_MS, value: null });
+    }
+    previousAt = check.checkedAt;
+    if (check.connection !== "ok" || !Number.isSafeInteger(check.playCount) || check.playCount! < 0) {
+      points.push({ time: check.checkedAt, value: null });
+      lastActiveAt = -Infinity;
+      lastStrength = 0;
+      continue;
+    }
+    const playing = check.playCount! > 0 && check.settled === false && check.closesAt !== null && check.checkedAt < check.closesAt;
+    if (playing) {
+      lastActiveAt = check.checkedAt;
+      lastStrength = Math.min(5, Math.sqrt(check.playCount!));
+    }
+    points.push({ time: check.checkedAt, value: playing ? lastStrength : lastStrength * Math.max(0, 1 - (check.checkedAt - lastActiveAt) / ACTIVITY_GRACE_MS) });
+  }
+  const latest = ordered.at(-1);
+  if (latest && now > latest.checkedAt) {
+    const valid = now - latest.checkedAt <= CHECK_STALE_MS && points.at(-1)?.value !== null;
+    const playing = valid && latest.playCount! > 0 && latest.settled === false && latest.closesAt !== null && now < latest.closesAt;
+    // The round closing is the last possible activity boundary for this sample.
+    const anchor = latest.playCount! > 0 && latest.settled === false && latest.closesAt !== null
+      ? Math.max(lastActiveAt, Math.min(latest.closesAt, now)) : lastActiveAt;
+    points.push({ time: now, value: !valid ? null : playing ? lastStrength : lastStrength * Math.max(0, 1 - (now - anchor) / ACTIVITY_GRACE_MS) });
+  }
+  return points;
+}
 
 export function activationMessage(address: string, timestamp: number) {
   return `SLVRBLOX Sentinel testnet activation\nWallet: ${address}\nTimestamp: ${timestamp}\nActivate one free test node. No purchase or token transfer. This is not a mainnet node.`;

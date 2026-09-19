@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ActivityMeter } from "./activity-meter";
 import { useCurrentAccount, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -72,10 +73,11 @@ export function SentinelDashboard() {
           {notice && <p role="alert" className="sentinel-error">{notice}</p>}
         </section>
         <section className="sentinel-details" aria-label="Node details">
-          <div className="sentinel-metrics"><article className="sentinel-card"><p>Assigned node weight</p><strong>{node ? SENTINEL_VMH : "—"} <small>VMH</small></strong><span>Virtual Mining Hashrate is an internal reward weight, not hardware hashing.</span></article><article className="sentinel-card"><p>Test rewards</p><strong className="sentinel-text-value">Not enabled yet</strong><span>Accrual and claiming are a later testing stage. No rewards are accumulating.</span></article></div>
+          <div className="sentinel-metrics"><article className="sentinel-card"><p>Fixed reward weight</p><strong>{node ? SENTINEL_VMH : "—"} <small>units</small></strong><span>Your assigned weight stays fixed. The activity meter does not affect rewards.</span></article><article className="sentinel-card"><p>Test rewards</p><strong className="sentinel-text-value">Not enabled yet</strong><span>Accrual and claiming are a later testing stage. No rewards are accumulating.</span></article></div>
           <article className="sentinel-card"><p className="sentinel-eyebrow">HOW THIS PILOT WORKS</p><h2>Help test the protocol dashboard</h2><p>Our hosted service observes SLVRBLOX game activity. Your test node gives you a place to review those observations and report what works or needs attention.</p><ul><li>Activate one free test node per wallet.</li><li>Return on different days and compare checks with game rounds.</li><li>Share dashboard, wallet, and mobile issues in <Link href="/chat">community chat</Link>.</li></ul><p className="sentinel-caption">The pilot runs alongside the game until it closes. Tester-airdrop rules will be published before qualifying activity begins; activation alone does not qualify.</p></article>
         </section>
       </div>
+      <ActivityMeter checks={data?.checks ?? []} now={now} unavailable={query.isError || !data?.enabled} />
       <section className="sentinel-card sentinel-monitor" aria-labelledby="monitor-title"><div className="sentinel-monitor-heading"><div><p className="sentinel-eyebrow">SHARED PROTOCOL OBSERVATIONS</p><h2 id="monitor-title">Protocol-check history</h2></div><button disabled={query.isFetching} onClick={() => void query.refetch()}>{query.isFetching ? "Refreshing…" : "Refresh history"}</button></div>
         <p>Checks are recorded by the hosted monitor approximately once a minute. Refreshing reads saved observations; it does not count as a new protocol check or verified testing task.</p>
         {query.isError ? <p role="alert" className="sentinel-error">{query.error.message} Previously loaded observations may be out of date.</p> : <p className={`sentinel-health health-${health}`} role="status">{health === "waiting" ? "Waiting for the first recorded check." : health === "stale" ? "Monitoring is stale. No recent check has been recorded." : health === "unavailable" ? "A recent chain or settlement lookup was unavailable." : health === "attention" ? "The observed round is past its close time and remains unsettled. Review game activity." : "Latest observation is current. This is a snapshot, not a guarantee of service health."}</p>}

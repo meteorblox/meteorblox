@@ -977,7 +977,6 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
     }
     const transaction = new Transaction();
     transaction.setSender(currentAccount.address);
-    transaction.setGasBudget(100_000_000);
     for (const operation of operations) {
       transaction.moveCall({
         target: `${activePackageId}::dslvr::${operation.target}`,
@@ -987,8 +986,12 @@ export function Game({ initialView = "mine" }: { initialView?: "mine" | "rewards
       });
     }
     setRoundAction(true);
-    setNotice(early ? "Waiting for one wallet approval to withdraw all unrefined DSLVR..." : "Waiting for one wallet approval to claim all refined DSLVR...");
+    setNotice("Checking your DSLVR claim and estimating gas...");
     try {
+      // Large refinery histories can exceed a fixed gas cap, even when storage
+      // rebates cover the final cost. Resolve and estimate before wallet approval.
+      await transaction.build({ client: dAppKit.getClient("testnet") });
+      setNotice(early ? "Waiting for one wallet approval to withdraw all unrefined DSLVR..." : "Waiting for one wallet approval to claim all refined DSLVR...");
       const result = await executeWithSlush(transaction);
       if (result) setNotice(early ? `All unrefined DSLVR withdrawn. Transaction: ${result.digest}` : `All currently refined DSLVR claimed. Transaction: ${result.digest}`);
       await refreshChainState();

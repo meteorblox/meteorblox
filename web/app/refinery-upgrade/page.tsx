@@ -6,6 +6,7 @@ import { refineryUpgradeData } from "../refinery-upgrade-data";
 import styles from "./page.module.css";
 import { approvedCapTransfer, buildApprovedCapTransfer } from "../upgrade-cap-transfer";
 import { walletPreferenceKey } from "../providers";
+import { prepareOwnerTransaction } from "../owner-transaction";
 
 type Status = { capId: string; gameId: string; refineryId: string; refineryV2Id: string; owner: string | null; gameAdmin: string; packageId: string; version: string; policy: number; active: boolean; candidateMatches: boolean; upgradeReady: boolean; activationReady: boolean };
 export default function RefineryUpgrade() {
@@ -85,7 +86,7 @@ export default function RefineryUpgrade() {
         transaction.moveCall({ target: "0x2::package::commit_upgrade", arguments: [cap, receipt] });
       }
       setNotice("Checking the transaction and estimating test SUI gas...");
-      await transaction.build({ client: dAppKit.getClient("testnet") });
+      await prepareOwnerTransaction(transaction, dAppKit.getClient("testnet"));
       setNotice(activate ? "Review activation in your wallet." : "Review the contract upgrade in your wallet. Rewards stay on the current storage until step 2.");
       const result = await dAppKit.signAndExecuteTransaction({ transaction, account, network: "testnet" });
       if ("FailedTransaction" in result && result.FailedTransaction) throw new Error(result.FailedTransaction.status.error?.message ?? "Transaction failed");

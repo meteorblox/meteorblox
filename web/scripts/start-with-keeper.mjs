@@ -2,9 +2,20 @@ import { spawn } from "node:child_process";
 
 const web = spawn("npm", ["run", "start:web"], { stdio: "inherit", shell: true });
 const keeperPaused = process.env.KEEPER_PAUSED?.trim().toLowerCase() === "true";
-const keeper = process.env.SUI_KEEPER_PRIVATE_KEY && !keeperPaused
-  ? spawn(process.execPath, ["scripts/keeper.mjs"], { stdio: "inherit" })
-  : null;
+let stopping = false;
+let restartTimer;
+let keeper = null;
+function startKeeper() {
+  if (stopping) return;
+  keeper = spawn(process.execPath, ["scripts/keeper.mjs"], { stdio: "inherit" });
+  keeper.on("error", () => console.error("[keeper] Worker launch failed."));
+  keeper.on("close", (code) => {
+    if (stopping) return;
+    console.error(`[keeper] Worker stopped (${code}); restarting in 10 seconds.`);
+    restartTimer = setTimeout(startKeeper, 10_000);
+  });
+}
+if (process.env.SUI_KEEPER_PRIVATE_KEY && !keeperPaused) startKeeper();
 const sentinel = process.env.SENTINEL_ENABLED === "true"
   ? spawn(process.execPath, ["--experimental-strip-types", "scripts/sentinel-monitor.mjs", "--run"], { stdio: "inherit" })
   : null;
@@ -15,6 +26,8 @@ if (!keeper) console.log(keeperPaused
   : "[keeper] Disabled until SUI_KEEPER_PRIVATE_KEY is configured.");
 
 const shutdown = (signal) => {
+  stopping = true;
+  clearTimeout(restartTimer);
   keeper?.kill(signal);
   sentinel?.kill(signal);
   web.kill(signal);
@@ -23,6 +36,8 @@ const shutdown = (signal) => {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 web.on("exit", (code) => {
+  stopping = true;
+  clearTimeout(restartTimer);
   keeper?.kill("SIGTERM");
   sentinel?.kill("SIGTERM");
   process.exit(code ?? 1);

@@ -29,7 +29,10 @@ async function getSqlite(): Promise<D1DatabaseLike | null> {
   if (!root[sqliteKey]) {
     const specifier = ["node", "sqlite"].join(":");
     const runtime = await import(/* @vite-ignore */ specifier) as { DatabaseSync: new (path: string) => SqliteDatabase };
-    root[sqliteKey] = new runtime.DatabaseSync(process.env.CHAT_DB_PATH);
+    const connection = new runtime.DatabaseSync(process.env.CHAT_DB_PATH);
+    connection.prepare("PRAGMA busy_timeout=5000").run();
+    connection.prepare("PRAGMA journal_mode=WAL").get();
+    root[sqliteKey] = connection;
   }
   const database = root[sqliteKey];
   return {

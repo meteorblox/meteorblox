@@ -2,7 +2,7 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { DatabaseSync } from "node:sqlite";
-import { renameSync, writeFileSync } from "node:fs";
+import { createHealthWriter } from "./keeper-health-writer.mjs";
 import { expiredRoundAction } from "./keeper-policy.mjs";
 
 const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
@@ -40,6 +40,7 @@ let lastCommunityAttemptAt = 0;
 let communityMemoryState = { lastPostAt: 0, promptIndex: 0 };
 
 const healthDb = process.env.CHAT_DB_PATH ? new DatabaseSync(process.env.CHAT_DB_PATH) : null;
+healthDb?.exec("PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;");
 const healthFile = process.env.CHAT_DB_PATH ? `${process.env.CHAT_DB_PATH}.keeper-health.json` : null;
 healthDb?.exec(`CREATE TABLE IF NOT EXISTS keeper_health (
   id INTEGER PRIMARY KEY,
@@ -54,32 +55,8 @@ healthDb?.exec(`CREATE TABLE IF NOT EXISTS community_bot_state (
   last_post_at INTEGER NOT NULL,
   prompt_index INTEGER NOT NULL
 )`);
-const writeHealth = (success, error = "") => {
-  const now = Date.now();
-  const prior = healthDb?.prepare("SELECT last_success_at, last_autoplay_at FROM keeper_health WHERE id = 1").get();
-  const record = {
-    updatedAt: now,
-    lastSuccessAt: success ? now : Number(prior?.last_success_at ?? 0),
-    lastAutoplayAt: autoplayExecutedThisTick ? now : Number(prior?.last_autoplay_at ?? 0),
-    consecutiveFailures,
-    lastError: error.slice(0, 500),
-  };
-  if (healthDb) healthDb.prepare(`INSERT INTO keeper_health
-    (id, updated_at, last_success_at, last_autoplay_at, consecutive_failures, last_error)
-    VALUES (1, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      updated_at = excluded.updated_at,
-      last_success_at = CASE WHEN excluded.last_success_at > 0 THEN excluded.last_success_at ELSE keeper_health.last_success_at END,
-      last_autoplay_at = CASE WHEN excluded.last_autoplay_at > 0 THEN excluded.last_autoplay_at ELSE keeper_health.last_autoplay_at END,
-      consecutive_failures = excluded.consecutive_failures,
-      last_error = excluded.last_error`)
-    .run(now, record.lastSuccessAt, record.lastAutoplayAt, consecutiveFailures, record.lastError);
-  if (healthFile) {
-    const temporary = `${healthFile}.tmp`;
-    writeFileSync(temporary, JSON.stringify(record));
-    renameSync(temporary, healthFile);
-  }
-};
+const persistHealth = createHealthWriter({ db: healthDb, file: healthFile });
+const writeHealth = (success, error = "") => persistHealth({ success, error, consecutiveFailures, autoplayExecuted: autoplayExecutedThisTick });
 
 if (!secret) throw new Error("SUI_KEEPER_PRIVATE_KEY is required.");
 

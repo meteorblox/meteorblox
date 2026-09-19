@@ -3,6 +3,7 @@ import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { DatabaseSync } from "node:sqlite";
 import { renameSync, writeFileSync } from "node:fs";
+import { expiredRoundAction } from "./keeper-policy.mjs";
 
 const fallbackPackageId = "0x1104e6c0e56478ad3f91b77f1058416c846f278f79ff1039162d59ec132dd5b5";
 const upgradeCapId = "0xae3f9a21abae0ae5e36c943e3e4a28d10f760832d5c6c9ba68c54bc4eb6c647d";
@@ -294,20 +295,39 @@ async function tick() {
 
   if (Date.now() < Number(game.closes_at_ms)) return;
 
-  const occupied = BigInt(game.pot ?? "0") > 0n || (game.entries ?? []).some((entry) => BigInt(entry.round) === currentRound);
-  if (!occupied) {
+  // Autoplay or another sender may have changed the game during this tick.
+  // Always classify the fresh round before choosing an empty-round transaction.
+  const { object: latestGame } = await client.core.getObject({ objectId: gameId, include: { json: true } });
+  if (!latestGame.json) throw new Error("Cannot classify round: current game state unavailable");
+  let action = expiredRoundAction(latestGame.json, [], Date.now());
+  // An unavailable autoplay registry must not prevent an occupied round settling.
+  if (action === "idle") {
+    const { object: latestRegistry } = await client.core.getObject({ objectId: autoplayRegistryId, include: { json: true } });
+    if (!Array.isArray(latestRegistry.json?.plans)) throw new Error("Cannot wake idle round: autoplay state unavailable");
+    action = expiredRoundAction(latestGame.json, latestRegistry.json.plans, Date.now());
+  }
+  if (action === "idle" || action === "wait") return;
+  if (action === "wake-autoplay") {
     const rolloverTx = new Transaction();
     rolloverTx.setSender(keypair.toSuiAddress());
-    rolloverTx.setGasBudget(20_000_000);
+    rolloverTx.setGasBudget(autoplayGasBudget);
     rolloverTx.moveCall({
       target: `${packageId}::game::close_empty_and_open_next`,
       arguments: [rolloverTx.object(gameId), rolloverTx.object(clockId)],
+    });
+    // Wake and place funded entries atomically, never pay just to spin an empty timer.
+    rolloverTx.moveCall({
+      target: `${packageId}::autoplay::${packageVersion >= 9 ? "execute_random_batch" : "execute_random_round"}`,
+      arguments: packageVersion >= 9
+        ? [rolloverTx.object(autoplayRegistryId), rolloverTx.object(gameId), rolloverTx.object(randomId), rolloverTx.object(clockId), rolloverTx.pure.u64(autoplayBatchSize)]
+        : [rolloverTx.object(autoplayRegistryId), rolloverTx.object(gameId), rolloverTx.object(randomId), rolloverTx.object(clockId)],
     });
     const rolloverResult = await keypair.signAndExecuteTransaction({ transaction: rolloverTx, client });
     if (rolloverResult.$kind === "FailedTransaction") {
       throw new Error(rolloverResult.FailedTransaction.status.error?.message ?? "Empty-round rollover failed");
     }
-    console.log(`[keeper] Closed empty round ${currentRound} and opened the next round. Transaction: ${rolloverResult.Transaction.digest}`);
+    autoplayExecutedThisTick = true;
+    console.log(`[keeper] Woke idle round and executed funded autoplay. Transaction: ${rolloverResult.Transaction.digest}`);
     await client.core.waitForTransaction({ digest: rolloverResult.Transaction.digest, timeout: 60_000 });
     return;
   }

@@ -5,6 +5,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { refineryUpgradeData } from "../refinery-upgrade-data";
 import styles from "./page.module.css";
 import { approvedCapTransfer, buildApprovedCapTransfer } from "../upgrade-cap-transfer";
+import { walletPreferenceKey } from "../providers";
 
 type Status = { capId: string; gameId: string; refineryId: string; refineryV2Id: string; owner: string | null; gameAdmin: string; packageId: string; version: string; policy: number; active: boolean; candidateMatches: boolean; upgradeReady: boolean; activationReady: boolean };
 export default function RefineryUpgrade() {
@@ -18,6 +19,23 @@ export default function RefineryUpgrade() {
     setStatus(next); return next as Status;
   }
   useEffect(() => { void refresh().catch((error) => setNotice(error.message)); }, []);
+  async function selectWallet(wallet?: (typeof wallets)[number]) {
+    setBusy(true);
+    try {
+      window.localStorage.removeItem(walletPreferenceKey);
+      if (currentWallet) {
+        setNotice(`Disconnecting ${currentWallet.name} from this site...`);
+        await dAppKit.disconnectWallet();
+      }
+      if (!wallet) { setNotice("Disconnected. Choose the wallet you want to use."); return; }
+      setNotice(`Open ${wallet.name} and approve the connection on Sui Testnet.`);
+      const result = await dAppKit.connectWallet({ wallet });
+      if (!result.accounts.length) throw new Error(`${wallet.name} did not authorize a Sui Testnet account. Select Testnet in that wallet and try again.`);
+      setNotice(`Connected with ${wallet.name}. Check the connected address before reviewing a transaction.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Wallet connection failed");
+    } finally { setBusy(false); }
+  }
   async function transferUpgradeCap() {
     if (!account) return;
     setBusy(true);
@@ -85,7 +103,8 @@ export default function RefineryUpgrade() {
     <p style={{ overflowWrap: "anywhere" }}>Upgrade owner: {status?.owner ?? "Loading…"}<br />Activation owner: {status?.gameAdmin ?? "Loading…"}<br />Connected: {account?.address ?? "No wallet connected"}</p>
     <p>Wallet: {currentWallet?.name ?? "Not connected"}</p>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-      {wallets.map((wallet) => <button key={wallet.name} disabled={busy} onClick={() => dAppKit.connectWallet({ wallet }).catch((error) => setNotice(error.message))}>{account ? "Use" : "Connect"} {wallet.name}</button>)}
+      {wallets.map((wallet) => <button key={wallet.name} disabled={busy} onClick={() => selectWallet(wallet)}>{account ? "Use" : "Connect"} {wallet.name}</button>)}
+      {currentWallet && <button disabled={busy} onClick={() => selectWallet()}>Disconnect wallet</button>}
     </div>
     {status?.owner === approvedCapTransfer.from && status.upgradeReady && <section className={styles.transfer}>
       <h2>Approved move to Suiet</h2>

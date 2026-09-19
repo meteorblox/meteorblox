@@ -17,7 +17,10 @@ function WalletSessionBridge() {
   const attemptedRestore = useRef(false);
 
   useEffect(() => {
-    if (account && currentWallet) window.localStorage.setItem(walletPreferenceKey, currentWallet.name);
+    if (account && currentWallet) {
+      attemptedRestore.current = true;
+      window.localStorage.setItem(walletPreferenceKey, currentWallet.name);
+    }
   }, [account, currentWallet]);
 
   useEffect(() => {

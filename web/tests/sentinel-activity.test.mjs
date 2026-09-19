@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activitySeries } from '../app/sentinel/model.ts';
+import { activitySeries, checkState } from '../app/sentinel/model.ts';
 import { observation } from '../scripts/sentinel-monitor.mjs';
 const start = 1_000_000;
 const check = (offset, count, extra = {}) => ({ checkedAt: start + offset, round: '1', closesAt: start + 600_000, settled: false, connection: 'ok', settlement: 'none', transaction: null, lastSettledRound: null, playCount: count, ...extra });
 const value = (checks, offset) => activitySeries(checks, start + offset).at(-1)?.value;
+
+test('intentional idle rounds stay healthy while overdue played rounds need attention', () => {
+  const empty = check(0, 0, { closesAt: start - 400_000 });
+  assert.equal(checkState(empty, start), 'current');
+  assert.equal(checkState({ ...empty, playCount: 2 }, start), 'attention');
+  assert.equal(checkState(empty, start + 180_001), 'stale');
+});
 
 test('meter rises with confirmed activity, stays capped, and empty timers are zero', () => {
   assert.equal(value([check(0, 0)], 0), 0);

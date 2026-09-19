@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ActivityMeter } from "./activity-meter";
-import { useCurrentAccount, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
+import { useCurrentAccount, useCurrentWallet, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { activationMessage, checkState, SENTINEL_VMH } from "./model";
@@ -17,6 +17,7 @@ const explorer = (kind: string, value: string) => `https://suiscan.xyz/testnet/$
 export function SentinelDashboard() {
   const account = useCurrentAccount();
   const kit = useDAppKit();
+  const wallet = useCurrentWallet();
   const wallets = useWallets();
   const queryClient = useQueryClient();
   const address = account?.address.toLowerCase() ?? "";
@@ -67,6 +68,7 @@ export function SentinelDashboard() {
           <h2 id="node-title">Sentinel Node</h2><p className="sentinel-state" role="status">{status}</p>
           {address ? <p className="sentinel-wallet" title={address}>{short(address)}</p> : <p>Connect a wallet to activate your free test node.</p>}
           {!address && <div className="sentinel-wallets">{wallets.map((wallet) => <button key={wallet.name} disabled={busy} onClick={async () => { setBusy(true); setNotice(""); try { await kit.connectWallet({ wallet }); } catch { setNotice("Wallet connection was not completed."); } finally { setBusy(false); } }}>Connect {wallet.name}</button>)}{!wallets.length && <Link href="/mine">Open wallet options on Mine →</Link>}</div>}
+          {address && <button disabled={busy} onClick={async () => { try { await kit.disconnectWallet(); } catch { setNotice("Unable to disconnect. Please try again."); } }}>Disconnect {wallet?.name ?? "wallet"}</button>}
           {address && !node && <button className="sentinel-primary" disabled={busy || query.isPending || query.isError || !data?.enabled || data.activationPaused} onClick={() => void activate()}>{busy ? "Waiting for wallet approval…" : !data?.enabled ? "Activation opens with the pilot" : data.activationPaused ? "Activation paused" : "Activate free test node"}</button>}
           {node && <p className="sentinel-caption">Activated {date(node.activatedAt)}. Your node is saved to this wallet.</p>}
           <p className="sentinel-caption">Activation uses a wallet message signature. No purchase, gas payment, or token transfer.</p>
@@ -74,7 +76,7 @@ export function SentinelDashboard() {
         </section>
         <section className="sentinel-details" aria-label="Node details">
           <div className="sentinel-metrics"><article className="sentinel-card"><p>Fixed reward weight</p><strong>{node ? SENTINEL_VMH : "—"} <small>units</small></strong><span>Your assigned weight stays fixed. The activity meter does not affect rewards.</span></article><article className="sentinel-card"><p>Test rewards</p><strong className="sentinel-text-value">Not enabled yet</strong><span>Accrual and claiming are a later testing stage. No rewards are accumulating.</span></article></div>
-          <article className="sentinel-card"><p className="sentinel-eyebrow">HOW THIS PILOT WORKS</p><h2>Help test the protocol dashboard</h2><p>Our hosted service observes SLVRBLOX game activity. Your test node gives you a place to review those observations and report what works or needs attention.</p><ul><li>Activate one free test node per wallet.</li><li>Return on different days and compare checks with game rounds.</li><li>Share dashboard, wallet, and mobile issues in <Link href="/chat">community chat</Link>.</li></ul><p className="sentinel-caption">The pilot runs alongside the game until it closes. Tester-airdrop rules will be published before qualifying activity begins; activation alone does not qualify.</p></article>
+          <article className="sentinel-card"><p className="sentinel-eyebrow">HOW THIS PILOT WORKS</p><h2>Help test the protocol dashboard</h2><p>Our hosted service observes SLVRBLOX game activity. Your test node gives you a place to review those observations and report what works or needs attention.</p><ul><li>Activate one free test node per wallet.</li><li>Return on different days and compare checks with game rounds.</li><li>Share dashboard, wallet, and mobile issues through <a href="https://discord.com/channels/1537270873587974174/1541589982962262187" target="_blank" rel="noreferrer">a private support ticket</a>.</li></ul><p className="sentinel-caption">The pilot runs alongside the game until it closes. Tester-airdrop rules will be published before qualifying activity begins; activation alone does not qualify.</p></article>
         </section>
       </div>
       <ActivityMeter checks={data?.checks ?? []} now={now} unavailable={query.isError || !data?.enabled} />
@@ -82,7 +84,7 @@ export function SentinelDashboard() {
         <p>Checks are recorded by the hosted monitor approximately once a minute. Refreshing reads saved observations; it does not count as a new protocol check or verified testing task.</p>
         {query.isError ? <p role="alert" className="sentinel-error">{query.error.message} Previously loaded observations may be out of date.</p> : <p className={`sentinel-health health-${health}`} role="status">{health === "waiting" ? "Waiting for the first recorded check." : health === "stale" ? "Monitoring is stale. No recent check has been recorded." : health === "unavailable" ? "A recent chain or settlement lookup was unavailable." : health === "attention" ? "The observed round is past its close time and remains unsettled. Review game activity." : "Latest observation is current. This is a snapshot, not a guarantee of service health."}</p>}
         {latest && <p className="sentinel-caption">Latest check: {date(latest.checkedAt)} · <a href={explorer("object", gameId)} target="_blank" rel="noreferrer">View testnet game object ↗</a></p>}
-        {!!data?.checks.length && <div className="sentinel-table-scroll"><table><thead><tr><th>Checked</th><th>Game round</th><th>Game state</th><th>Latest settlement observed</th></tr></thead><tbody>{data.checks.map((check) => <tr key={check.checkedAt}><td>{date(check.checkedAt)}</td><td>{check.round ?? "Unavailable"}</td><td>{check.connection !== "ok" ? "Lookup unavailable" : check.settled ? "Settled" : "Awaiting settlement"}</td><td>{check.settlement === "unavailable" ? "Lookup unavailable" : check.settlement === "none" ? "No event returned" : check.transaction ? <a href={explorer("tx", check.transaction)} target="_blank" rel="noreferrer">Round {check.lastSettledRound ?? "unknown"} ↗</a> : `Round ${check.lastSettledRound ?? "unknown"}`}</td></tr>)}</tbody></table></div>}
+        {!!data?.checks.length && <div className="sentinel-table-scroll"><table><thead><tr><th>Checked</th><th>Game round</th><th>Game state</th><th>Latest settlement observed</th></tr></thead><tbody>{data.checks.map((check) => <tr key={check.checkedAt}><td>{date(check.checkedAt)}</td><td>{check.round ?? "Unavailable"}</td><td>{check.connection !== "ok" ? "Lookup unavailable" : check.settled ? "Settled" : check.playCount === 0 ? "Idle · waiting for play" : "Awaiting settlement"}</td><td>{check.settlement === "unavailable" ? "Lookup unavailable" : check.settlement === "none" ? "No event returned" : check.transaction ? <a href={explorer("tx", check.transaction)} target="_blank" rel="noreferrer">Round {check.lastSettledRound ?? "unknown"} ↗</a> : `Round ${check.lastSettledRound ?? "unknown"}`}</td></tr>)}</tbody></table></div>}
       </section>
       <footer className="sentinel-footer">SLVRBLOX Sentinel · Sui Testnet · Test nodes are temporary and do not grant a mainnet node. Test tokens have no monetary value.</footer>
     </div>

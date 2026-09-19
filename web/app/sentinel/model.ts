@@ -72,6 +72,7 @@ export function checkState(check: ProtocolCheck | null, now = Date.now()) {
   if (!check) return "waiting";
   if (now - check.checkedAt > CHECK_STALE_MS) return "stale";
   if (check.connection !== "ok" || check.settlement === "unavailable") return "unavailable";
-  if (check.settled === false && check.closesAt !== null && now > check.closesAt + 300_000) return "attention";
+  // Empty rounds intentionally sleep to conserve keeper gas.
+  if (check.settled === false && check.playCount !== 0 && check.closesAt !== null && now > check.closesAt + 300_000) return "attention";
   return "current";
 }
